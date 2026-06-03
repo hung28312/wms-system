@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS 智能倉儲管理系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        /* 隱藏未啟動的選單頁面 */
+        .page-content { display: none; }
+        .page-content.active { display: block; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <nav class="bg-blue-600 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                
+                <div class="text-xl font-bold flex items-center space-x-2 shrink-0 mr-4">
+                    <span>📦 WMS 系統</span>
+                </div>
+                
+                <div class="flex space-x-1 md:space-x-2 text-sm md:text-base overflow-x-auto scrollbar-none py-1">
+                    <button onclick="switchPage('pallet')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-pallet">棧板管理</button>
+                    <button onclick="switchPage('pickup')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-pickup">現場撿貨</button>
+                    <button onclick="switchPage('stock')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-stock">庫存查詢</button>
+                    <button onclick="switchPage('users')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-users">員工名單</button>
+                </div>
+
+                <div class="shrink-0 ml-4">
+                    <button onclick="switchPage('login')" class="nav-btn px-3 py-2 bg-blue-800 font-semibold rounded-md hover:bg-blue-900 transition flex items-center space-x-1" id="btn-login">
+                        <span>🔑 系統登入</span>
+                    </button>
+
+                    <div id="user-status-zone" class="hidden flex items-center space-x-3 bg-blue-700 px-3 py-1.5 rounded-full border border-blue-400">
+                        <div class="flex flex-col text-right text-xs">
+                            <span id="nav-display-name" class="font-bold text-sm text-yellow-300">現場人員</span>
+                            <span id="nav-user-role" class="text-blue-200 text-[10px]">權限</span>
+                        </div>
+                        <button onclick="handleLogout()" class="text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition font-medium">登出</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto mt-6 p-4">
+
+        <div id="page-pallet" class="page-content active bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">📥 棧板入庫管理 (pallet_orders)</h2>
+            <p class="text-gray-600 mb-4">此處未來可對接 Supabase 的棧板儲位資料表，顯示目前廠內的棧板狀態。</p>
+            <div class="border-4 border-dashed border-gray-200 rounded-lg h-48 flex items-center justify-center text-gray-400">
+                [ 棧板儲位即時看板預留區 ]
+            </div>
+        </div>
+
+        <div id="page-pickup" class="page-content bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">⚡ 現場撿貨作業</h2>
+            <p class="text-gray-600 mb-4">提供現場大哥拿著 PDA 或手機，即時勾選已撿貨品，並即時回傳雲端扣庫存。</p>
+            <div class="border-4 border-dashed border-gray-200 rounded-lg h-48 flex items-center justify-center text-gray-400">
+                [ 待撿貨單勾選清單預留區 ]
+            </div>
+        </div>
+
+        <div id="page-stock" class="page-content bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">🔍 全廠庫存即時查詢</h2>
+            <p class="text-gray-600 mb-4">輸入儲位代號或產品名稱，秒級查出雲端最新儲位剩餘容量。</p>
+            <input type="text" placeholder="輸入儲位或產品代碼..." class="w-full md:w-64 p-2 border border-gray-300 rounded mb-4">
+        </div>
+
+        <div id="page-users" class="page-content bg-white p-6 rounded-lg shadow-md">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">👥 員工權限名單 (users)</h2>
+                <button onclick="fetchUsersFromSupabase()" class="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded shadow transition">
+                    🔄 抓取雲端最新名單
+                </button>
+            </div>
+            <p class="text-gray-600 mb-4">這裡的資料正是由您剛剛在 **Excel 點按鈕** 原生直連射上雲端的最新數據！</p>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-700 font-bold border-b border-gray-200">
+                            <th class="p-3">帳號 (username)</th>
+                            <th class="p-3">現場姓名 (display_name)</th>
+                            <th class="p-3">權限職責 (role)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-table-body" class="text-gray-600">
+                        <tr>
+                            <td class="p-3 border-b border-gray-100 italic text-gray-400" colspan="3">尚未抓取資料，請點選右上角按鈕...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="page-login" class="page-content bg-white p-6 rounded-lg shadow-md max-w-sm mx-auto mt-10">
+            <h2 class="text-2xl font-bold text-gray-800 text-center mb-6">🔑 WMS 系統登入</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">工號 / 帳號</label>
+                    <input type="text" id="login-username" placeholder="請輸入您的帳號" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
+                    <input type="password" id="login-password" placeholder="請輸入密碼" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <button onclick="handleLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded shadow transition mt-2">
+                    安全登入
+                </button>
+            </div>
+            
+            <div id="login-msg" class="mt-4 text-center text-sm font-semibold text-red-500"></div>
+        </div>
+
+    </main>
+
+    <script>
+        // 全域變數：暫存當前登入的使用者資訊
+        let currentUser = null;
+
+        // --- 1. 導覽列分頁切換邏輯 ---
+        function switchPage(pageId) {
+            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('bg-blue-700', 'bg-blue-900'));
+            
+            document.getElementById('page-' + pageId).classList.add('active');
+            
+            // 如果點選的是登入鈕，給予深色高亮
+            const loginBtn = document.getElementById('btn-login');
+            if (loginBtn && pageId === 'login') {
+                loginBtn.classList.add('bg-blue-900');
+            } else if (document.getElementById('btn-' + pageId)) {
+                document.getElementById('btn-' + pageId).classList.add('bg-blue-700');
+            }
+        }
+
+        // --- 2. 串接 Supabase：抓取員工名單 ---
+        async function fetchUsersFromSupabase() {
+            const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co/rest/v1/users"; 
+            const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14"; 
+
+            const tbody = document.getElementById('user-table-body');
+            tbody.innerHTML = `<tr><td class="p-3 text-blue-500" colspan="3">⏳ 正在通訊雲端資料庫中...</td></tr>`;
+
+            try {
+                const response = await fetch(SUPABASE_URL, {
+                    method: "GET",
+                    headers: {
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td class="p-3 text-amber-500" colspan="3">⚠️ 雲端目前沒有任何資料。</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = "";
+                data.forEach(user => {
+                    const row = document.createElement('tr');
+                    row.className = "hover:bg-gray-50 border-b border-gray-100 transition";
+                    row.innerHTML = `
+                        <td class="p-3 font-mono">${user.username || ''}</td>
+                        <td class="p-3 font-semibold text-gray-800">${user.display_name || ''}</td>
+                        <td class="p-3"><span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">${user.role || 'user'}</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+            } catch (error) {
+                tbody.innerHTML = `<tr><td class="p-3 text-red-500" colspan="3">❌ 連線失敗: ${error.message}</td></tr>`;
+            }
+        }
+
+        // --- 3. 🔑 處理登入驗證（與右上角狀態連動） ---
+        async function handleLogin() {
+            const userIn = document.getElementById('login-username').value.trim();
+            const passIn = document.getElementById('login-password').value.trim();
+            const msgZone = document.getElementById('login-msg');
+
+            if (!userIn || !passIn) {
+                msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
+                msgZone.innerText = "⚠️ 帳號與密碼不能留空！";
+                return;
+            }
+
+            msgZone.className = "mt-4 text-center text-sm font-semibold text-blue-500";
+            msgZone.innerText = "⏳ 正在驗證您的員工權限...";
+
+            const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co/rest/v1/users"; 
+            const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14"; 
+
+            try {
+                // 條件過濾 URL
+                const filterUrl = `${SUPABASE_URL}?username=eq.${encodeURIComponent(userIn)}&password=eq.${encodeURIComponent(passIn)}`;
+
+                const response = await fetch(filterUrl, {
+                    method: "GET",
+                    headers: {
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+
+                const matchedUsers = await response.json();
+
+                if (matchedUsers && matchedUsers.length > 0) {
+                    // 🎉 驗證成功
+                    currentUser = matchedUsers[0];
+                    
+                    msgZone.className = "mt-4 text-center text-sm font-semibold text-green-600";
+                    msgZone.innerHTML = `🎉 登入成功！歡迎 ${currentUser.display_name}`;
+                    
+                    // 🎯【核心連動】更新右上角 UI 狀態
+                    document.getElementById('btn-login').classList.add('hidden'); // 隱藏登入鈕
+                    document.getElementById('nav-display-name').innerText = "👤 " + currentUser.display_name; // 塞入姓名
+                    document.getElementById('nav-user-role').innerText = "職責: " + (currentUser.role || "未分配"); // 塞入角色
+                    document.getElementById('user-status-zone').classList.remove('hidden'); // 秀出頭像狀態區
+
+                    // 1.5 秒後自動瞬移跳轉
+                    setTimeout(() => {
+                        document.getElementById('login-username').value = "";
+                        document.getElementById('login-password').value = "";
+                        msgZone.innerText = "";
+                        switchPage('pickup'); // 跳轉到現場撿貨開工
+                    }, 1200);
+
+                } else {
+                    msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
+                    msgZone.innerText = "❌ 登入失敗：工號或密碼不正確！";
+                }
+
+            } catch (error) {
+                msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
+                msgZone.innerText = `💥 雲端連線異常: ${error.message}`;
+            }
+        }
+
+        // --- 4. 🚪 處理登出邏輯 ---
+        function handleLogout() {
+            if(confirm("確定要登出系統嗎？")) {
+                currentUser = null;
+                // 還原右上角 UI
+                document.getElementById('user-status-zone').classList.add('hidden');
+                document.getElementById('btn-login').classList.remove('hidden');
+                
+                // 跳回首頁（棧板管理）
+                switchPage('pallet');
+            }
+        }
+    </script>
+</body>
+</html>
