@@ -26,6 +26,7 @@
                     <button onclick="switchPage('pickup')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-pickup">現場撿貨</button>
                     <button onclick="switchPage('stock')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-stock">庫存查詢</button>
                     <button onclick="switchPage('users')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-users">員工名單</button>
+                    <button onclick="switchPage('chgpass')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-chgpass">變更密碼</button>
                 </div>
 
                 <div class="shrink-0 ml-4">
@@ -97,6 +98,31 @@
             </div>
         </div>
 
+        <div id="page-chgpass" class="page-content bg-white p-6 rounded-lg shadow-md max-w-sm mx-auto mt-10">
+            <h2 class="text-2xl font-bold text-gray-800 text-center mb-2">🔐 變更個人密碼</h2>
+            <p id="chgpass-user-tip" class="text-center text-xs text-blue-600 font-semibold mb-6">請先登入系統後才能修改密碼</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">請輸入舊密碼</label>
+                    <input type="password" id="old-password" placeholder="目前正在使用的密碼" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">請輸入新密碼</label>
+                    <input type="password" id="new-password" placeholder="欲設定的新密碼" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">再次確認新密碼</label>
+                    <input type="password" id="confirm-password" placeholder="請再次輸入新密碼" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <button onclick="handleChangePassword()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 rounded shadow transition mt-2">
+                    確認修改密碼
+                </button>
+            </div>
+            
+            <div id="chgpass-msg" class="mt-4 text-center text-sm font-semibold text-red-500"></div>
+        </div>
+
         <div id="page-login" class="page-content bg-white p-6 rounded-lg shadow-md max-w-sm mx-auto mt-10">
             <h2 class="text-2xl font-bold text-gray-800 text-center mb-6">🔑 WMS 系統登入</h2>
             
@@ -120,17 +146,25 @@
     </main>
 
     <script>
-        // 全域變數：暫存當前登入的使用者資訊
+        // 全域變數：暫存與控制公用核心
         let currentUser = null;
+        const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co/rest/v1/users"; 
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14"; 
 
         // --- 1. 導覽列分頁切換邏輯 ---
         function switchPage(pageId) {
+            // 安全防線：如果點選變更密碼，但根本沒登入，強制跳去登入
+            if (pageId === 'chgpass' && !currentUser) {
+                alert("⚠️ 請先完成系統登入，才能修改您個人的密碼！");
+                switchPage('login');
+                return;
+            }
+
             document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('bg-blue-700', 'bg-blue-900'));
             
             document.getElementById('page-' + pageId).classList.add('active');
             
-            // 如果點選的是登入鈕，給予深色高亮
             const loginBtn = document.getElementById('btn-login');
             if (loginBtn && pageId === 'login') {
                 loginBtn.classList.add('bg-blue-900');
@@ -141,9 +175,6 @@
 
         // --- 2. 串接 Supabase：抓取員工名單 ---
         async function fetchUsersFromSupabase() {
-            const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co/rest/v1/users"; 
-            const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14"; 
-
             const tbody = document.getElementById('user-table-body');
             tbody.innerHTML = `<tr><td class="p-3 text-blue-500" colspan="3">⏳ 正在通訊雲端資料庫中...</td></tr>`;
 
@@ -155,14 +186,11 @@
                         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
                     }
                 });
-
                 const data = await response.json();
-                
                 if (data.length === 0) {
                     tbody.innerHTML = `<tr><td class="p-3 text-amber-500" colspan="3">⚠️ 雲端目前沒有任何資料。</td></tr>`;
                     return;
                 }
-
                 tbody.innerHTML = "";
                 data.forEach(user => {
                     const row = document.createElement('tr');
@@ -174,13 +202,12 @@
                     `;
                     tbody.appendChild(row);
                 });
-
             } catch (error) {
                 tbody.innerHTML = `<tr><td class="p-3 text-red-500" colspan="3">❌ 連線失敗: ${error.message}</td></tr>`;
             }
         }
 
-        // --- 3. 🔑 處理登入驗證（與右上角狀態連動） ---
+        // --- 3. 🔑 處理登入驗證 ---
         async function handleLogin() {
             const userIn = document.getElementById('login-username').value.trim();
             const passIn = document.getElementById('login-password').value.trim();
@@ -195,13 +222,8 @@
             msgZone.className = "mt-4 text-center text-sm font-semibold text-blue-500";
             msgZone.innerText = "⏳ 正在驗證您的員工權限...";
 
-            const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co/rest/v1/users"; 
-            const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14"; 
-
             try {
-                // 條件過濾 URL
                 const filterUrl = `${SUPABASE_URL}?username=eq.${encodeURIComponent(userIn)}&password=eq.${encodeURIComponent(passIn)}`;
-
                 const response = await fetch(filterUrl, {
                     method: "GET",
                     headers: {
@@ -209,50 +231,135 @@
                         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
                     }
                 });
-
                 const matchedUsers = await response.json();
 
                 if (matchedUsers && matchedUsers.length > 0) {
-                    // 🎉 驗證成功
                     currentUser = matchedUsers[0];
                     
                     msgZone.className = "mt-4 text-center text-sm font-semibold text-green-600";
                     msgZone.innerHTML = `🎉 登入成功！歡迎 ${currentUser.display_name}`;
                     
-                    // 🎯【核心連動】更新右上角 UI 狀態
-                    document.getElementById('btn-login').classList.add('hidden'); // 隱藏登入鈕
-                    document.getElementById('nav-display-name').innerText = "👤 " + currentUser.display_name; // 塞入姓名
-                    document.getElementById('nav-user-role').innerText = "職責: " + (currentUser.role || "未分配"); // 塞入角色
-                    document.getElementById('user-status-zone').classList.remove('hidden'); // 秀出頭像狀態區
+                    // 更新右上角 UI 狀態
+                    document.getElementById('btn-login').classList.add('hidden');
+                    document.getElementById('nav-display-name').innerText = "👤 " + currentUser.display_name;
+                    document.getElementById('nav-user-role').innerText = "職責: " + (currentUser.role || "未分配");
+                    document.getElementById('user-status-zone').classList.remove('hidden');
 
-                    // 1.5 秒後自動瞬移跳轉
+                    // 連鎖動態：同步改寫變更密碼頁面的提示字眼
+                    document.getElementById('chgpass-user-tip').innerText = `🔒 當前操作員工：${currentUser.display_name} (${currentUser.username})`;
+
                     setTimeout(() => {
                         document.getElementById('login-username').value = "";
                         document.getElementById('login-password').value = "";
                         msgZone.innerText = "";
-                        switchPage('pickup'); // 跳轉到現場撿貨開工
+                        switchPage('pickup'); // 自動跳轉開工
                     }, 1200);
-
                 } else {
                     msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
                     msgZone.innerText = "❌ 登入失敗：工號或密碼不正確！";
                 }
-
             } catch (error) {
                 msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
                 msgZone.innerText = `💥 雲端連線異常: ${error.message}`;
             }
         }
 
-        // --- 4. 🚪 處理登出邏輯 ---
+        // --- 🎯 4. 🔐 處理變更密碼邏輯（全新大招） ---
+        async function handleChangePassword() {
+            const oldPass = document.getElementById('old-password').value.trim();
+            const newPass = document.getElementById('new-password').value.trim();
+            const confPass = document.getElementById('confirm-password').value.trim();
+            const msgZone = document.getElementById('chgpass-msg');
+
+            // 防呆 A：沒登入不給填
+            if (!currentUser) {
+                alert("請先完成登入！");
+                switchPage('login');
+                return;
+            }
+
+            // 防呆 B：欄位空缺
+            if (!oldPass || !newPass || !confPass) {
+                msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
+                msgZone.innerText = "⚠️ 所有密碼欄位皆必須填寫！";
+                return;
+            }
+
+            // 防呆 C：輸入的舊密碼，跟當初登入進來的密碼對不上
+            if (oldPass !== currentUser.password) {
+                msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
+                msgZone.innerText = "❌ 舊密碼輸入錯誤，請重新確認！";
+                return;
+            }
+
+            // 防呆 D：兩次新密碼不吻合
+            if (newPass !== confPass) {
+                msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
+                msgZone.innerText = "❌ 兩次輸入的新密碼不一致！";
+                return;
+            }
+
+            // 防呆 E：新舊密碼長得一模一樣
+            if (newPass === oldPass) {
+                msgZone.className = "mt-4 text-center text-sm font-semibold text-amber-500";
+                msgZone.innerText = "💡 新密碼不可與舊密碼完全相同！";
+                return;
+            }
+
+            msgZone.className = "mt-4 text-center text-sm font-semibold text-blue-500";
+            msgZone.innerText = "⏳ 正在傳輸新密碼至雲端核心...";
+
+            try {
+                // 🎯【發射 UPDATE 指令】鎖定目前登入者的主鍵 id：?id=eq.數字
+                const updateUrl = `${SUPABASE_URL}?id=eq.${currentUser.id}`;
+
+                const response = await fetch(updateUrl, {
+                    method: "PATCH", // Supabase 的部分更新使用 PATCH 動作
+                    headers: {
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        password: newPass // 只更新密碼欄位
+                    })
+                });
+
+                if (response.ok) {
+                    // 同步更新地端暫存的密碼，防止大哥待會重複點擊報錯
+                    currentUser.password = newPass;
+
+                    msgZone.className = "mt-4 text-center text-sm font-semibold text-green-600";
+                    msgZone.innerText = "🎉 密碼修改成功！新密碼已即時生效。";
+
+                    // 清空輸入欄位
+                    document.getElementById('old-password').value = "";
+                    document.getElementById('new-password').value = "";
+                    document.getElementById('confirm-password').value = "";
+
+                    setTimeout(() => {
+                        msgZone.innerText = "";
+                        switchPage('pickup'); // 修改完成後，貼心帶大哥回開工分頁
+                    }, 1500);
+                } else {
+                    const errData = await response.json();
+                    msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
+                    msgZone.innerText = `❌ 雲端拒絕更新: ${errData.message || '請檢查 RLS UPDATE 政策'}`;
+                }
+
+            } catch (error) {
+                msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
+                msgZone.innerText = `💥 網路傳輸崩潰: ${error.message}`;
+            }
+        }
+
+        // --- 5. 🚪 處理登出邏輯 ---
         function handleLogout() {
             if(confirm("確定要登出系統嗎？")) {
                 currentUser = null;
-                // 還原右上角 UI
                 document.getElementById('user-status-zone').classList.add('hidden');
                 document.getElementById('btn-login').classList.remove('hidden');
-                
-                // 跳回首頁（棧板管理）
+                document.getElementById('chgpass-user-tip').innerText = "請先登入系統後才能修改密碼";
                 switchPage('pallet');
             }
         }
