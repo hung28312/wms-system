@@ -2,181 +2,216 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>WMS 智能倉儲管理系統</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-        /* 隱藏未啟動的選單頁面 */
         .page-content { display: none; }
         .page-content.active { display: block; }
+        /* 避免手機雙擊畫面時會放大縮小，干擾點擊速度 */
+        button, input { touch-action: manipulation; }
     </style>
 </head>
-<body class="bg-gray-100 font-sans">
+<body class="bg-gray-100 font-sans antialiased text-gray-800">
 
-    <nav class="bg-blue-600 text-white shadow-lg sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-4">
-            <div class="flex justify-between items-center h-16">
-                
-                <div class="text-xl font-bold flex items-center space-x-2 shrink-0 mr-4">
-                    <span>📦 WMS 系統</span>
-                </div>
-                
-                <div class="flex space-x-1 md:space-x-2 text-sm md:text-base overflow-x-auto scrollbar-none py-1">
-                    <button onclick="switchPage('pallet')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-pallet">棧板管理</button>
-                    <button onclick="switchPage('pickup')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-pickup">現場撿貨</button>
-                    <button onclick="switchPage('stock')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-stock">庫存查詢</button>
-                    <button onclick="switchPage('users')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-users">員工名單</button>
-                    <button onclick="switchPage('chgpass')" class="nav-btn px-3 py-2 rounded-md hover:bg-blue-700 transition shrink-0" id="btn-chgpass">變更密碼</button>
-                </div>
-
-                <div class="shrink-0 ml-4">
-                    <button onclick="switchPage('login')" class="nav-btn px-3 py-2 bg-blue-800 font-semibold rounded-md hover:bg-blue-900 transition flex items-center space-x-1" id="btn-login">
-                        <span>🔑 系統登入</span>
-                    </button>
-
-                    <div id="user-status-zone" class="hidden flex items-center space-x-3 bg-blue-700 px-3 py-1.5 rounded-full border border-blue-400">
-                        <div class="flex flex-col text-right text-xs">
-                            <span id="nav-display-name" class="font-bold text-sm text-yellow-300">現場人員</span>
-                            <span id="nav-user-role" class="text-blue-200 text-[10px]">權限</span>
-                        </div>
-                        <button onclick="handleLogout()" class="text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition font-medium">登出</button>
-                    </div>
-                </div>
-
+    <nav class="bg-blue-600 text-white shadow-lg sticky top-0 z-50 select-none">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center">
+            
+            <div class="text-xl font-bold flex items-center space-x-1">
+                <span>📦 WMS 系統</span>
             </div>
+            
+            <div class="flex items-center space-x-3">
+                <div id="nav-user-badge" class="hidden bg-blue-700 px-3 py-1 rounded-full border border-blue-400 text-xs font-bold text-yellow-300">
+                    <span id="nav-display-name">現場人員</span>
+                </div>
+
+                <button onclick="toggleMobileMenu()" class="bg-blue-800 p-2.5 rounded-lg focus:outline-none hover:bg-blue-900 active:scale-95 transition min-w-[44px] min-h-[44px] flex items-center justify-center text-xl">
+                    ☰
+                </button>
+            </div>
+
         </div>
     </nav>
 
-    <main class="max-w-4xl mx-auto mt-6 p-4">
+    <div id="mobile-menu" class="hidden fixed inset-0 bg-gray-900/95 z-50 flex flex-col justify-between p-6 transition-all animate-fade-in select-none">
+        <div class="flex flex-col space-y-4 mt-12">
+            <div class="text-gray-400 text-xs font-bold tracking-wider px-2 uppercase mb-1">📋 系統主功能選單</div>
+            
+            <button onclick="menuNavigate('pallet')" class="w-full text-left bg-gray-800 hover:bg-gray-700 text-white font-bold h-14 px-5 rounded-xl flex items-center justify-between text-lg border border-gray-700" id="mbtn-pallet">
+                <span>📥 棧板入庫管理</span> <span>➔</span>
+            </button>
+            <button onclick="menuNavigate('pickup')" class="w-full text-left bg-gray-800 hover:bg-gray-700 text-white font-bold h-14 px-5 rounded-xl flex items-center justify-between text-lg border border-gray-700" id="mbtn-pickup">
+                <span>⚡ 現場撿貨作業</span> <span>➔</span>
+            </button>
+            <button onclick="menuNavigate('stock')" class="w-full text-left bg-gray-800 hover:bg-gray-700 text-white font-bold h-14 px-5 rounded-xl flex items-center justify-between text-lg border border-gray-700" id="mbtn-stock">
+                <span>🔍 全廠庫存查詢</span> <span>➔</span>
+            </button>
+            <button onclick="menuNavigate('users')" class="w-full text-left bg-gray-800 hover:bg-gray-700 text-white font-bold h-14 px-5 rounded-xl flex items-center justify-between text-lg border border-gray-700" id="mbtn-users">
+                <span>👥 員工權限名單</span> <span>➔</span>
+            </button>
+            <button onclick="menuNavigate('chgpass')" class="w-full text-left bg-gray-800 hover:bg-gray-700 text-white font-bold h-14 px-5 rounded-xl flex items-center justify-between text-lg border border-gray-700" id="mbtn-chgpass">
+                <span>🔐 變更個人密碼</span> <span>➔</span>
+            </button>
+        </div>
 
-        <div id="page-pallet" class="page-content active bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">📥 棧板入庫管理 (pallet_orders)</h2>
-            <p class="text-gray-600 mb-4">此處未來可對接 Supabase 的棧板儲位資料表，顯示目前廠內的棧板狀態。</p>
-            <div class="border-4 border-dashed border-gray-200 rounded-lg h-48 flex items-center justify-center text-gray-400">
+        <div class="mb-6 flex flex-col space-y-3">
+            <button onclick="menuNavigate('login')" id="mbtn-login" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black h-14 rounded-xl text-lg shadow-lg flex items-center justify-center space-x-2">
+                <span>🔑 進入系統登入</span>
+            </button>
+            
+            <div id="mobile-logout-zone" class="hidden flex flex-col space-y-3">
+                <div class="text-center text-sm text-yellow-400 font-semibold bg-gray-800 py-2 rounded-lg" id="mobile-user-info">
+                    當前登入：未命名 (user)
+                </div>
+                <button onclick="handleLogout(false)" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold h-14 rounded-xl text-lg flex items-center justify-center">
+                    🚪 安全登出系統
+                </button>
+            </div>
+
+            <button onclick="toggleMobileMenu()" class="w-full bg-gray-700 text-gray-300 font-medium h-12 rounded-xl text-base flex items-center justify-center active:bg-gray-600">
+                ✕ 關閉功能選單
+            </button>
+        </div>
+    </div>
+
+
+    <main class="max-w-2xl mx-auto p-4 mt-2">
+
+        <div id="page-pallet" class="page-content active bg-white p-5 rounded-2xl shadow-md border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">📥 棧板入庫管理 (pallet_orders)</h2>
+            <p class="text-sm text-gray-500 mb-4">此處未來可對接 Supabase 顯示廠內最新棧板狀態。</p>
+            <div class="border-2 border-dashed border-gray-300 rounded-xl h-44 flex items-center justify-center text-gray-400 bg-gray-50 text-sm">
                 [ 棧板儲位即時看板預留區 ]
             </div>
         </div>
 
-        <div id="page-pickup" class="page-content bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">⚡ 現場撿貨作業</h2>
-            <p class="text-gray-600 mb-4">提供現場大哥拿著 PDA 或手機，即時勾選已撿貨品，並即時回傳雲端扣庫存。</p>
-            <div class="border-4 border-dashed border-gray-200 rounded-lg h-48 flex items-center justify-center text-gray-400">
+        <div id="page-pickup" class="page-content bg-white p-5 rounded-2xl shadow-md border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">⚡ 現場撿貨作業</h2>
+            <p class="text-sm text-gray-500 mb-4">提供現場大哥拿著手機，即時勾選已撿貨品。</p>
+            <div class="border-2 border-dashed border-gray-300 rounded-xl h-44 flex items-center justify-center text-gray-400 bg-gray-50 text-sm">
                 [ 待撿貨單勾選清單預留區 ]
             </div>
         </div>
 
-        <div id="page-stock" class="page-content bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">🔍 全廠庫存即時查詢</h2>
-            <p class="text-gray-600 mb-4">輸入儲位代號或產品名稱，秒級查出雲端最新儲位剩餘容量。</p>
-            <input type="text" placeholder="輸入儲位或產品代碼..." class="w-full md:w-64 p-2 border border-gray-300 rounded mb-4">
+        <div id="page-stock" class="page-content bg-white p-5 rounded-2xl shadow-md border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 mb-3">🔍 全廠庫存即時查詢</h2>
+            <p class="text-sm text-gray-500 mb-4">輸入儲位代號或產品名稱，秒級查出容量。</p>
+            <input type="text" placeholder="點擊此處輸入儲位或代碼..." class="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base focus:outline-none placeholder-gray-400 shadow-sm">
         </div>
 
-        <div id="page-users" class="page-content bg-white p-6 rounded-lg shadow-md">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-gray-800">👥 員工權限名單 (users)</h2>
-                <button onclick="fetchUsersFromSupabase()" class="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded shadow transition">
+        <div id="page-users" class="page-content bg-white p-5 rounded-2xl shadow-md border border-gray-200">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                <h2 class="text-xl font-bold text-gray-800">👥 員工權限名單 (users)</h2>
+                <button onclick="fetchUsersFromSupabase()" class="w-full sm:w-auto bg-green-600 text-white font-bold h-11 px-4 rounded-xl shadow active:bg-green-700 transition text-sm">
                     🔄 抓取雲端最新名單
                 </button>
             </div>
-            <p class="text-gray-600 mb-4">這裡的資料正是由您剛剛在 **Excel 點按鈕** 原生直連射上雲端的最新數據！</p>
             
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
+            <div class="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
+                <table class="w-full text-left border-collapse text-sm">
                     <thead>
-                        <tr class="bg-gray-100 text-gray-700 font-bold border-b border-gray-200">
-                            <th class="p-3">帳號 (username)</th>
-                            <th class="p-3">現場姓名 (display_name)</th>
-                            <th class="p-3">權限職責 (role)</th>
+                        <tr class="bg-gray-50 text-gray-600 font-bold border-b border-gray-200">
+                            <th class="p-3">帳號</th>
+                            <th class="p-3">現場姓名</th>
+                            <th class="p-3">權限</th>
                         </tr>
                     </thead>
-                    <tbody id="user-table-body" class="text-gray-600">
+                    <tbody id="user-table-body" class="text-gray-600 divide-y divide-gray-100">
                         <tr>
-                            <td class="p-3 border-b border-gray-100 italic text-gray-400" colspan="3">尚未抓取資料，請點選右上角按鈕...</td>
+                            <td class="p-3 italic text-gray-400" colspan="3">尚未抓取資料...</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <div id="page-chgpass" class="page-content bg-white p-6 rounded-lg shadow-md max-w-sm mx-auto mt-10">
-            <h2 class="text-2xl font-bold text-gray-800 text-center mb-2">🔐 變更個人密碼</h2>
-            <p id="chgpass-user-tip" class="text-center text-xs text-blue-600 font-semibold mb-6">請先登入系統後才能修改密碼</p>
+        <div id="page-chgpass" class="page-content bg-white p-6 rounded-2xl shadow-md max-w-sm mx-auto border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 text-center mb-1">🔐 變更個人密碼</h2>
+            <p id="chgpass-user-tip" class="text-center text-xs text-blue-600 font-semibold mb-5">請先登入系統後才能修改密碼</p>
             
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">請輸入舊密碼</label>
-                    <input type="password" id="old-password" placeholder="目前正在使用的密碼" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">請輸入舊密碼</label>
+                    <input type="password" id="old-password" placeholder="目前的密碼" class="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-base">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">請輸入新密碼</label>
-                    <input type="password" id="new-password" placeholder="欲設定的新密碼" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">請輸入新密碼</label>
+                    <input type="password" id="new-password" placeholder="欲設定的新密碼" class="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-base">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">再次確認新密碼</label>
-                    <input type="password" id="confirm-password" placeholder="請再次輸入新密碼" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">再次確認新密碼</label>
+                    <input type="password" id="confirm-password" placeholder="再次確認新密碼" class="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-base">
                 </div>
-                <button onclick="handleChangePassword()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 rounded shadow transition mt-2">
+                <button onclick="handleChangePassword()" class="w-full bg-amber-500 text-white font-bold h-12 rounded-xl shadow active:bg-amber-600 transition mt-2 text-base">
                     確認修改密碼
                 </button>
             </div>
-            
             <div id="chgpass-msg" class="mt-4 text-center text-sm font-semibold text-red-500"></div>
         </div>
 
-        <div id="page-login" class="page-content bg-white p-6 rounded-lg shadow-md max-w-sm mx-auto mt-10">
-            <h2 class="text-2xl font-bold text-gray-800 text-center mb-6">🔑 WMS 系統登入</h2>
+        <div id="page-login" class="page-content bg-white p-6 rounded-2xl shadow-md max-w-sm mx-auto border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 text-center mb-5">🔑 WMS 系統登入</h2>
             
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">工號 / 帳號</label>
-                    <input type="text" id="login-username" placeholder="請輸入您的帳號" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">工號 / 帳號</label>
+                    <input type="text" id="login-username" placeholder="請輸入您的帳號" class="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-base">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
-                    <input type="password" id="login-password" placeholder="請輸入密碼" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">密碼</label>
+                    <input type="password" id="login-password" placeholder="請輸入密碼" class="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-base">
                 </div>
-                <button onclick="handleLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded shadow transition mt-2">
+                <button onclick="handleLogin()" class="w-full bg-blue-600 text-white font-bold h-12 rounded-xl shadow active:bg-blue-700 transition mt-2 text-base">
                     安全登入
                 </button>
             </div>
-            
             <div id="login-msg" class="mt-4 text-center text-sm font-semibold text-red-500"></div>
         </div>
 
     </main>
 
     <script>
-        // 全域變數：暫存與控制公用核心
         let currentUser = null;
         const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co/rest/v1/users"; 
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14"; 
 
-        // --- 1. 導覽列分頁切換邏輯 ---
+        // 📱 控制手機選單開關
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        // 📱 手機選單專用跳轉控制
+        function menuNavigate(pageId) {
+            toggleMobileMenu(); // 先關掉選單
+            switchPage(pageId); // 跳轉頁面
+        }
+
+        // 核心分頁切換
         function switchPage(pageId) {
-            // 安全防線：如果點選變更密碼，但根本沒登入，強制跳去登入
             if (pageId === 'chgpass' && !currentUser) {
                 alert("⚠️ 請先完成系統登入，才能修改您個人的密碼！");
                 switchPage('login');
                 return;
             }
 
+            // 關閉所有頁面
             document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('bg-blue-700', 'bg-blue-900'));
-            
             document.getElementById('page-' + pageId).classList.add('active');
-            
-            const loginBtn = document.getElementById('btn-login');
-            if (loginBtn && pageId === 'login') {
-                loginBtn.classList.add('bg-blue-900');
-            } else if (document.getElementById('btn-' + pageId)) {
-                document.getElementById('btn-' + pageId).classList.add('bg-blue-700');
+
+            // 幫手機選單裡的按鈕標註高亮樣式
+            document.querySelectorAll('#mobile-menu button').forEach(b => b.classList.remove('bg-blue-900', 'border-blue-400'));
+            const activeMobileBtn = document.getElementById('mbtn-' + pageId);
+            if (activeMobileBtn) {
+                activeMobileBtn.classList.add('bg-blue-900', 'border-blue-400');
             }
         }
 
-        // --- 2. 串接 Supabase：抓取員工名單 ---
+        // 串接 Supabase：抓取員工名單
         async function fetchUsersFromSupabase() {
             const tbody = document.getElementById('user-table-body');
-            tbody.innerHTML = `<tr><td class="p-3 text-blue-500" colspan="3">⏳ 正在通訊雲端資料庫中...</td></tr>`;
+            tbody.innerHTML = `<tr><td class="p-3 text-blue-500" colspan="3">⏳ 正在同步雲端中...</td></tr>`;
 
             try {
                 const response = await fetch(SUPABASE_URL, {
@@ -194,11 +229,11 @@
                 tbody.innerHTML = "";
                 data.forEach(user => {
                     const row = document.createElement('tr');
-                    row.className = "hover:bg-gray-50 border-b border-gray-100 transition";
+                    row.className = "hover:bg-gray-50 border-b border-gray-100";
                     row.innerHTML = `
                         <td class="p-3 font-mono">${user.username || ''}</td>
                         <td class="p-3 font-semibold text-gray-800">${user.display_name || ''}</td>
-                        <td class="p-3"><span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">${user.role || 'user'}</span></td>
+                        <td class="p-3"><span class="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">${user.role || 'user'}</span></td>
                     `;
                     tbody.appendChild(row);
                 });
@@ -207,7 +242,7 @@
             }
         }
 
-        // --- 3. 🔑 處理登入驗證 ---
+        // 🔑 處理登入驗證
         async function handleLogin() {
             const userIn = document.getElementById('login-username').value.trim();
             const passIn = document.getElementById('login-password').value.trim();
@@ -239,20 +274,22 @@
                     msgZone.className = "mt-4 text-center text-sm font-semibold text-green-600";
                     msgZone.innerHTML = `🎉 登入成功！歡迎 ${currentUser.display_name}`;
                     
-                    // 更新右上角 UI 狀態
-                    document.getElementById('btn-login').classList.add('hidden');
+                    // 📱 手機版 UI 連動優化
                     document.getElementById('nav-display-name').innerText = "👤 " + currentUser.display_name;
-                    document.getElementById('nav-user-role').innerText = "職責: " + (currentUser.role || "未分配");
-                    document.getElementById('user-status-zone').classList.remove('hidden');
+                    document.getElementById('nav-user-badge').classList.remove('hidden'); // 導覽列秀名字
+                    
+                    // 手機選單內部切換
+                    document.getElementById('mbtn-login').classList.add('hidden');
+                    document.getElementById('mobile-user-info').innerText = `當前登入：${currentUser.display_name} (${currentUser.role || 'user'})`;
+                    document.getElementById('mobile-logout-zone').classList.remove('hidden');
 
-                    // 連鎖動態：同步改寫變更密碼頁面的提示字眼
                     document.getElementById('chgpass-user-tip').innerText = `🔒 當前操作員工：${currentUser.display_name} (${currentUser.username})`;
 
                     setTimeout(() => {
                         document.getElementById('login-username').value = "";
                         document.getElementById('login-password').value = "";
                         msgZone.innerText = "";
-                        switchPage('pickup'); // 自動跳轉開工
+                        switchPage('pickup'); 
                     }, 1200);
                 } else {
                     msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
@@ -264,42 +301,37 @@
             }
         }
 
-        // --- 🎯 4. 🔐 處理變更密碼邏輯（全新大招） ---
+        // 🔐 處理變更密碼邏輯
         async function handleChangePassword() {
             const oldPass = document.getElementById('old-password').value.trim();
             const newPass = document.getElementById('new-password').value.trim();
             const confPass = document.getElementById('confirm-password').value.trim();
             const msgZone = document.getElementById('chgpass-msg');
 
-            // 防呆 A：沒登入不給填
             if (!currentUser) {
                 alert("請先完成登入！");
                 switchPage('login');
                 return;
             }
 
-            // 防呆 B：欄位空缺
             if (!oldPass || !newPass || !confPass) {
                 msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
                 msgZone.innerText = "⚠️ 所有密碼欄位皆必須填寫！";
                 return;
             }
 
-            // 防呆 C：輸入的舊密碼，跟當初登入進來的密碼對不上
             if (oldPass !== currentUser.password) {
                 msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
                 msgZone.innerText = "❌ 舊密碼輸入錯誤，請重新確認！";
                 return;
             }
 
-            // 防呆 D：兩次新密碼不吻合
             if (newPass !== confPass) {
                 msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
                 msgZone.innerText = "❌ 兩次輸入的新密碼不一致！";
                 return;
             }
 
-            // 防呆 E：新舊密碼長得一模一樣
             if (newPass === oldPass) {
                 msgZone.className = "mt-4 text-center text-sm font-semibold text-amber-500";
                 msgZone.innerText = "💡 新密碼不可與舊密碼完全相同！";
@@ -307,44 +339,39 @@
             }
 
             msgZone.className = "mt-4 text-center text-sm font-semibold text-blue-500";
-            msgZone.innerText = "⏳ 正在傳輸新密碼至雲端核心...";
+            msgZone.innerText = "⏳ 正在安全傳輸新密碼至雲端核心...";
 
             try {
-                // 🎯【發射 UPDATE 指令】鎖定目前登入者的主鍵 id：?id=eq.數字
                 const updateUrl = `${SUPABASE_URL}?id=eq.${currentUser.id}`;
 
                 const response = await fetch(updateUrl, {
-                    method: "PATCH", // Supabase 的部分更新使用 PATCH 動作
+                    method: "PATCH", 
                     headers: {
                         "apikey": SUPABASE_ANON_KEY,
                         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
                         "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
-                        password: newPass // 只更新密碼欄位
+                        password: newPass 
                     })
                 });
 
                 if (response.ok) {
-                    // 同步更新地端暫存的密碼，防止大哥待會重複點擊報錯
-                    currentUser.password = newPass;
-
                     msgZone.className = "mt-4 text-center text-sm font-semibold text-green-600";
-                    msgZone.innerText = "🎉 密碼修改成功！新密碼已即時生效。";
+                    msgZone.innerText = "🎉 密碼修改成功！新密碼已送入資料庫。系統將自動登出，請用新密碼重新登入。";
 
-                    // 清空輸入欄位
                     document.getElementById('old-password').value = "";
                     document.getElementById('new-password').value = "";
                     document.getElementById('confirm-password').value = "";
 
                     setTimeout(() => {
                         msgZone.innerText = "";
-                        switchPage('pickup'); // 修改完成後，貼心帶大哥回開工分頁
-                    }, 1500);
+                        handleLogout(true); 
+                    }, 2500);
                 } else {
                     const errData = await response.json();
                     msgZone.className = "mt-4 text-center text-sm font-semibold text-red-500";
-                    msgZone.innerText = `❌ 雲端拒絕更新: ${errData.message || '請檢查 RLS UPDATE 政策'}`;
+                    msgZone.innerText = `❌ 雲端拒絕更新: ${errData.message || '請檢查 RLS 政策'}`;
                 }
 
             } catch (error) {
@@ -353,14 +380,18 @@
             }
         }
 
-        // --- 5. 🚪 處理登出邏輯 ---
-        function handleLogout() {
-            if(confirm("確定要登出系統嗎？")) {
+        // 🚪 處理登出邏輯
+        function handleLogout(force = false) {
+            if (force || confirm("確定要登出系統嗎？")) {
                 currentUser = null;
-                document.getElementById('user-status-zone').classList.add('hidden');
-                document.getElementById('btn-login').classList.remove('hidden');
+                
+                // 還原 UI 狀態
+                document.getElementById('nav-user-badge').classList.add('hidden');
+                document.getElementById('mbtn-login').classList.remove('hidden');
+                document.getElementById('mobile-logout-zone').classList.add('hidden');
                 document.getElementById('chgpass-user-tip').innerText = "請先登入系統後才能修改密碼";
-                switchPage('pallet');
+                
+                switchPage('login');
             }
         }
     </script>
