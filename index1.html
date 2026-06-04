@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS 棧板撿貨管理系統 (全相容版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased">
+
+    <header class="bg-blue-600 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-boxes-stacked"></i> WMS 棧板撿貨管理系統
+            </h1>
+            <span class="text-sm bg-blue-700 px-3 py-1 rounded-full text-blue-100 flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> 雲端連線就緒
+            </span>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        
+        <div id="page-overview" class="space-y-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">出貨訂單與棧板總覽</h2>
+                    <p class="text-gray-500 text-sm mt-1">點擊出貨單可查看其底下的棧板資訊；點擊「待撿貨」棧板可進入明細。</p>
+                </div>
+                <button onclick="fetchOrdersAndPallets()" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg shadow-sm hover:bg-gray-50 transition flex items-center gap-2">
+                    <i id="refresh-icon" class="fa-solid fa-arrow-rotate-right"></i> 重新整理
+                </button>
+            </div>
+
+            <div id="error-debug-box" class="hidden bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-circle-exclamation text-red-600 text-xl mt-0.5"></i>
+                    <div>
+                        <h4 class="font-bold text-red-800">聯絡雲端資料庫時發生技術錯誤</h4>
+                        <p class="text-sm text-red-700 mt-1 font-mono bg-white p-2 rounded border border-red-200" id="error-debug-msg"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loading-overview" class="hidden text-center py-12">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+                <p class="text-gray-500 mt-2">正在從 Supabase 雲端下載最新訂單中...</p>
+            </div>
+
+            <div id="order-list-container" class="space-y-4"></div>
+        </div>
+
+        <div id="page-detail" class="hidden space-y-6">
+            <div class="flex items-center justify-between border-b border-gray-200 pb-4">
+                <div class="flex items-center gap-4">
+                    <button onclick="switchPage('overview')" class="text-gray-600 hover:text-blue-600 font-medium flex items-center gap-1 transition">
+                        <i class="fa-solid fa-chevron-left"></i> 返回總覽
+                    </button>
+                    <div class="h-4 w-px bg-gray-300"></div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900" id="detail-pallet-no">棧板單號：-</h2>
+                        <p class="text-gray-500 text-sm mt-0.5" id="detail-order-info">出貨廠商：- | 出貨日期：-</p>
+                    </div>
+                </div>
+                <span id="detail-pallet-status" class="px-3 py-1 rounded-full text-sm font-semibold"></span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                    <div class="p-3 bg-blue-50 text-blue-600 rounded-lg"><i class="fa-solid fa-weight-hanging text-lg"></i></div>
+                    <div><p class="text-xs text-gray-400 font-medium">總重量</p><p class="text-lg font-bold" id="summary-weight">0 kg</p></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                    <div class="p-3 bg-indigo-50 text-indigo-600 rounded-lg"><i class="fa-solid fa-cube text-lg"></i></div>
+                    <div><p class="text-xs text-gray-400 font-medium">總材積</p><p class="text-lg font-bold" id="summary-cubic">0 材</p></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                    <div class="p-3 bg-purple-50 text-purple-600 rounded-lg"><i class="fa-solid fa-chart-pie text-lg"></i></div>
+                    <div><p class="text-xs text-gray-400 font-medium">佔位比例</p><p class="text-lg font-bold" id="summary-ratio">0 %</p></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                    <div class="p-3 bg-orange-50 text-orange-600 rounded-lg"><i class="fa-solid fa-calculator text-lg"></i></div>
+                    <div><p class="text-xs text-gray-400 font-medium">總件數</p><p class="text-lg font-bold" id="summary-pieces">0 件</p></div>
+                </div>
+            </div>
+
+            <div id="loading-detail" class="hidden text-center py-12">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+                <p class="text-gray-500 mt-2">正在載入該棧板的商品及效期明細...</p>
+            </div>
+
+            <div id="detail-table-container" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-sm font-semibold border-b border-gray-200">
+                                <th class="p-4 w-16 text-center">項次</th>
+                                <th class="p-4">商品編號</th>
+                                <th class="p-4">商品名稱</th>
+                                <th class="p-4">規劃效期</th>
+                                <th class="p-4 text-center">預計撿貨數 (Pcs)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detail-item-tbody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14";
+
+        let localPalletOrders = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchOrdersAndPallets();
+        });
+
+        function switchPage(pageName) {
+            const overview = document.getElementById("page-overview");
+            const detail = document.getElementById("page-detail");
+            if (pageName === "overview") {
+                overview.classList.remove("hidden");
+                detail.classList.add("hidden");
+            } else {
+                overview.classList.add("hidden");
+                detail.classList.remove("hidden");
+            }
+        }
+
+        // 🔄 讀取主單據 (修正排序依賴)
+        async function fetchOrdersAndPallets() {
+            const container = document.getElementById("order-list-container");
+            const loader = document.getElementById("loading-overview");
+            const refreshIcon = document.getElementById("refresh-icon");
+            const debugBox = document.getElementById("error-debug-box");
+            
+            container.innerHTML = "";
+            debugBox.classList.add("hidden");
+            loader.classList.remove("hidden");
+            refreshIcon.classList.add("animate-spin");
+
+            try {
+                // 💡 改用必定存在的 id 欄位做倒序排序
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/pallet_orders?order=id.desc`, {
+                    method: "GET",
+                    headers: {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`[HTTP ${response.status}] ${errorText}`);
+                }
+                
+                const rawData = await response.text();
+                localPalletOrders = JSON.parse(rawData);
+                
+                const ordersMap = {};
+                localPalletOrders.forEach(pallet => {
+                    const vendorName = pallet.ship_vendor || "未指定廠商";
+                    const shipDate = pallet.ship_date || "未排程";
+                    const orderKey = `${vendorName}_${shipDate}`;
+                    
+                    if (!ordersMap[orderKey]) {
+                        ordersMap[orderKey] = {
+                            vendor: vendorName,
+                            date: shipDate,
+                            pallets: []
+                        };
+                    }
+                    ordersMap[orderKey].pallets.push(pallet);
+                });
+
+                Object.keys(ordersMap).forEach((key, index) => {
+                    const order = ordersMap[key];
+                    const palletCount = order.pallets.length;
+                    const orderCard = document.createElement("div");
+                    orderCard.className = "bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow duration-200";
+                    
+                    orderCard.innerHTML = `
+                        <div onclick="toggleOrderDropdown(${index})" class="p-5 flex justify-between items-center cursor-pointer hover:bg-gray-50 select-none transition">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xl">
+                                    <i class="fa-solid fa-file-invoice"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-bold text-gray-900">${order.vendor}</h3>
+                                    <p class="text-gray-400 text-xs mt-0.5"><i class="fa-regular fa-calendar"></i> 出貨日期：${order.date}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1.5 rounded-lg">共 ${palletCount} 板</span>
+                                <i id="arrow-${index}" class="fa-solid fa-chevron-down text-gray-400 transition-transform"></i>
+                            </div>
+                        </div>
+                        <div id="dropdown-${index}" class="hidden border-t border-gray-100 bg-gray-50/50 p-4 divide-y divide-gray-100"></div>
+                    `;
+
+                    const dropdownBody = orderCard.querySelector(`#dropdown-${index}`);
+                    order.pallets.forEach(pallet => {
+                        const palletRow = document.createElement("div");
+                        palletRow.className = "py-3 flex justify-between items-center first:pt-0 last:pb-0";
+                        
+                        let statusStyle = "";
+                        let isClickable = false;
+
+                        if (pallet.status === "待撿貨") {
+                            statusStyle = "bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer hover:bg-amber-200 hover:scale-[1.01] transition-all";
+                            isClickable = true;
+                        } else if (pallet.status === "撿貨中") {
+                            statusStyle = "bg-blue-100 text-blue-800 border border-blue-200";
+                        } else {
+                            statusStyle = "bg-green-100 text-green-800 border border-green-200";
+                        }
+
+                        palletRow.innerHTML = `
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-pallet text-gray-400"></i>
+                                <span class="font-mono text-sm font-semibold text-gray-700">${pallet.pallet_no || '未知單號'}</span>
+                                <span class="text-xs text-gray-400">(總重: ${pallet.total_weight || 0}kg / ${pallet.total_pieces || 0}件)</span>
+                            </div>
+                            <div>
+                                <span ${isClickable ? `onclick="openPalletDetail(${pallet.id})"` : ''} class="px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 shadow-2xs ${statusStyle}">
+                                    ${pallet.status || '待撿貨'} ${isClickable ? '<i class="fa-solid fa-chevron-right text-[10px]"></i>' : ''}
+                                </span>
+                            </div>
+                        `;
+                        dropdownBody.appendChild(palletRow);
+                    });
+
+                    container.appendChild(orderCard);
+                });
+
+                if (Object.keys(ordersMap).length === 0) {
+                    container.innerHTML = `<div class="text-center py-12 text-gray-400 bg-white border border-dashed rounded-xl"><p>目前資料庫是空的，請先用 Excel VBA 上傳資料。</p></div>`;
+                }
+
+            } catch (error) {
+                console.error(error);
+                debugBox.classList.remove("hidden");
+                document.getElementById("error-debug-msg").innerText = error.message;
+            } finally {
+                loader.classList.add("hidden");
+                refreshIcon.classList.remove("animate-spin");
+            }
+        }
+
+        function toggleOrderDropdown(id) {
+            const dropdown = document.getElementById(`dropdown-${id}`);
+            const arrow = document.getElementById(`arrow-${id}`);
+            dropdown.classList.toggle("hidden");
+            arrow.classList.toggle("rotate-180");
+        }
+
+        // 📥 讀取商品明細 (修正排序依賴)
+        async function openPalletDetail(palletId) {
+            const palletInfo = localPalletOrders.find(p => p.id === palletId);
+            if (!palletInfo) return;
+
+            document.getElementById("detail-pallet-no").innerText = `棧板單號：${palletInfo.pallet_no}`;
+            document.getElementById("detail-order-info").innerText = `出貨廠商：${palletInfo.ship_vendor || '未指定'} | 出貨日期：${palletInfo.ship_date || '未排程'}`;
+            
+            const statusLabel = document.getElementById("detail-pallet-status");
+            statusLabel.innerText = palletInfo.status;
+            statusLabel.className = "px-3 py-1 rounded-full text-sm font-bold bg-amber-100 text-amber-800 border border-amber-200";
+
+            document.getElementById("summary-weight").innerText = `${palletInfo.total_weight || 0} kg`;
+            document.getElementById("summary-cubic").innerText = `${palletInfo.total_cubic || 0} 材`;
+            document.getElementById("summary-ratio").innerText = `${Math.round((palletInfo.space_ratio || 0) * 100)} %`;
+            document.getElementById("summary-pieces").innerText = `${palletInfo.total_pieces || 0} 件`;
+
+            switchPage("detail");
+            const tbody = document.getElementById("detail-item-tbody");
+            const loader = document.getElementById("loading-detail");
+            tbody.innerHTML = "";
+            loader.classList.remove("hidden");
+
+            try {
+                // 💡 改用 id 進行正序排序
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/pallet_items?order_pallet_id=eq.${palletId}&select=*&order=id.asc`, {
+                    method: "GET",
+                    headers: {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+
+                if (!response.ok) throw new Error(`[明細讀取失敗] HTTP ${response.status}`);
+                const items = await response.json();
+
+                const detailResponse = await fetch(`${SUPABASE_URL}/rest/v1/pallet_item_details`, {
+                    method: "GET",
+                    headers: {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+                const allDetails = detailResponse.ok ? await detailResponse.json() : [];
+
+                items.forEach(item => {
+                    const row = document.createElement("tr");
+                    row.className = "hover:bg-gray-50/80 transition";
+                    
+                    const matchedDetail = allDetails.find(d => d.pallet_item_id === item.id);
+                    const expDateStr = (matchedDetail && matchedDetail.exp_date) ? matchedDetail.exp_date : `<span class="text-gray-400 italic">無指定效期</span>`;
+                    
+                    row.innerHTML = `
+                        <td class="p-4 text-center font-mono text-sm text-gray-500">${item.line_no || '-'}</td>
+                        <td class="p-4 font-mono text-sm text-gray-900 font-medium">${item.item_no || '-'}</td>
+                        <td class="p-4 text-gray-700">${item.item_name || '-'}</td>
+                        <td class="p-4 font-mono text-sm text-gray-600">${expDateStr}</td>
+                        <td class="p-4 text-center font-bold text-blue-600 text-base">${item.qty_target_pcs || 0}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                if (items.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">該棧板內部沒有綁定商品明細。</td></tr>`;
+                }
+
+            } catch (error) {
+                console.error(error);
+                alert("讀取明細時發生錯誤: " + error.message);
+                switchPage("overview");
+            } finally {
+                loader.classList.add("hidden");
+            }
+        }
+    </script>
+</body>
+</html>
