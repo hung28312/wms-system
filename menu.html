@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WMS 行動中控管理系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 text-gray-900 font-sans antialiased h-screen flex flex-col overflow-hidden select-none">
+
+    <div id="auth-screen" class="fixed inset-0 bg-slate-900 z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-6 border border-gray-100">
+            <div class="text-center space-y-1">
+                <div class="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mx-auto text-2xl shadow-xs">
+                    <i class="fa-solid fa-warehouse"></i>
+                </div>
+                <h2 class="text-xl font-black text-slate-800 tracking-tight">WMS 行動管理平台</h2>
+                <p class="text-xs text-slate-400">請輸入核心工號與密碼進行驗證</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">工號 (Username)</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-user-shield text-sm"></i></span>
+                        <input type="text" id="auth-user" class="w-full pl-9 pr-3 py-3 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-600 text-base font-mono bg-gray-50/50" placeholder="ADMIN01 / OP001">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">密碼 (Password)</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-lock text-sm"></i></span>
+                        <input type="password" id="auth-pass" class="w-full pl-9 pr-3 py-3 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-600 text-base font-mono bg-gray-50/50" placeholder="請輸入密碼">
+                    </div>
+                </div>
+
+                <div id="auth-err" class="hidden bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 text-xs font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation shrink-0"></i>
+                    <span id="auth-err-text">驗證失敗，請核對工號密碼。</span>
+                </div>
+
+                <button onclick="handleLogin()" id="btn-login" class="w-full h-12 bg-indigo-600 active:bg-indigo-800 text-white font-bold rounded-xl text-base shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
+                    <span>驗證並登入</span> <i class="fa-solid fa-right-to-bracket text-sm"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden h-screen flex flex-col overflow-hidden w-full">
+        
+        <header class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shrink-0 shadow-md z-40">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleDrawer(true)" class="p-1 -ml-1 text-xl active:text-indigo-400 cursor-pointer">
+                    <i class="fa-solid fa-bars-staggered"></i>
+                </button>
+                <div>
+                    <h1 class="text-sm font-black tracking-wider text-white" id="header-title-main">WMS MOBILE</h1>
+                    <p class="text-[10px] text-slate-400 font-sans" id="header-subtitle">載入中...</p>
+                </div>
+            </div>
+            <div id="sys-clock" class="text-[10px] font-mono font-bold text-slate-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">13:39:00</div>
+        </header>
+
+        <div id="drawer-overlay" onclick="toggleDrawer(false)" class="hidden fixed inset-0 bg-black/60 z-50 transition-opacity"></div>
+        <aside id="drawer-menu" class="fixed top-0 bottom-0 left-0 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between z-50 transform -translate-x-full transition-transform duration-300 ease-in-out border-r border-slate-800 shadow-2xl">
+            <div>
+                <div class="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-cubes text-indigo-400 text-lg animate-pulse"></i>
+                        <span class="text-xs font-black tracking-wider text-white">選單中樞</span>
+                    </div>
+                    <button onclick="toggleDrawer(false)" class="text-slate-400 active:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+
+                <nav class="p-2 space-y-1 text-sm font-medium">
+                    <button onclick="switchPage('orders-mgmt')" id="nav-orders-mgmt" class="nav-item w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left active:bg-slate-800">
+                        <i class="fa-solid fa-file-invoice w-5 text-center text-indigo-400"></i> <span>1. 訂單管理</span>
+                    </button>
+                    <button onclick="switchPage('orders-query')" id="nav-orders-query" class="nav-item w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left active:bg-slate-800">
+                        <i class="fa-solid fa-magnifying-glass-chart w-5 text-center text-sky-400"></i> <span>2. 訂單查詢</span>
+                    </button>
+                    <button onclick="switchPage('users-mgmt')" id="nav-users-mgmt" class="nav-item w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left active:bg-slate-800">
+                        <i class="fa-solid fa-users-gear w-5 text-center text-emerald-400"></i> <span>3. 人員管理</span>
+                    </button>
+                    <button onclick="switchPage('picking-ops')" id="nav-picking-ops" class="nav-item w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left active:bg-slate-800">
+                        <i class="fa-solid fa-barcode-read w-5 text-center text-amber-400"></i> <span>4. 撿貨作業</span>
+                    </button>
+                    <button onclick="switchPage('password-change')" id="nav-password-change" class="nav-item w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left active:bg-slate-800">
+                        <i class="fa-solid fa-key w-5 text-center text-rose-400"></i> <span>5. 變更密碼</span>
+                    </button>
+                </nav>
+            </div>
+
+            <div class="p-3 border-t border-slate-800 bg-slate-950/60 space-y-2">
+                <div class="flex items-center gap-2.5 bg-slate-900/80 p-2 border border-slate-800 rounded-xl">
+                    <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0" id="user-initial">-</div>
+                    <div class="overflow-hidden">
+                        <h4 class="text-xs font-black text-white truncate" id="side-user-name">-</h4>
+                        <span class="text-[9px] font-mono px-1 py-0.2 bg-indigo-950 text-indigo-300 rounded border border-indigo-900 font-bold uppercase tracking-wider" id="side-user-role">-</span>
+                    </div>
+                </div>
+                <button onclick="handleLogout()" class="w-full bg-slate-800 active:bg-red-950 border border-slate-700 font-bold py-2.5 rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-power-off text-[10px]"></i> 登出系統
+                </button>
+            </div>
+        </aside>
+
+        <main class="grow p-3 overflow-y-auto bg-gray-100">
+
+            <section id="page-orders-mgmt" class="page-view hidden space-y-3">
+                <div class="bg-white p-4 rounded-xl shadow-xs border border-gray-200/60 space-y-3">
+                    <h3 class="text-sm font-black text-slate-800"><i class="fa-solid fa-folder-plus text-indigo-500 mr-1"></i> 新增/匯入棧板出貨主單</h3>
+                    <div class="p-6 border-2 border-dashed border-gray-200 bg-gray-50 rounded-xl text-center text-gray-400 text-xs space-y-2">
+                        <i class="fa-solid fa-file-excel text-2xl text-emerald-500"></i>
+                        <p class="font-bold">點擊此處上傳 ERP 撿貨訂單</p>
+                        <p class="text-[10px] text-gray-400">支援 Excel / CSV / JSON 格式</p>
+                    </div>
+                    <button class="w-full bg-indigo-600 active:bg-indigo-800 text-white font-bold py-3 rounded-lg text-xs shadow-xs"><i class="fa-solid fa-cloud-arrow-up"></i> 瀏覽手機外部檔案</button>
+                </div>
+            </section>
+
+            <section id="page-orders-query" class="page-view hidden space-y-3">
+                <div class="bg-white p-3 rounded-xl shadow-xs border border-gray-200/60 flex gap-2">
+                    <input type="text" id="query-search" class="grow border border-gray-200 rounded-lg px-2 text-xs font-mono" placeholder="搜尋單號/廠商...">
+                    <button onclick="fetchQueryOrders()" class="bg-indigo-600 active:bg-indigo-800 text-white font-bold text-xs px-3 py-2.5 rounded-lg shrink-0"><i class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
+                <div id="card-list-orders" class="space-y-2"></div>
+            </section>
+
+            <section id="page-users-mgmt" class="page-view hidden space-y-3">
+                <div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 text-xs font-medium flex gap-2">
+                    <i class="fa-solid fa-circle-info shrink-0 text-sm mt-0.5"></i>
+                    <span><code>picker_id</code> 欄位請對齊下方各人員對應之<b>整數主鍵 ID</b>。</span>
+                </div>
+                <div id="card-list-users" class="space-y-2"></div>
+            </section>
+
+            <section id="page-picking-ops" class="page-view hidden space-y-3">
+                <div class="bg-white p-4 rounded-xl shadow-xs border border-gray-200/60 space-y-3">
+                    <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                        <h3 class="text-sm font-black text-slate-800"><i class="fa-solid fa-mobile-screen text-amber-500 mr-1"></i> PDA 撿貨作業面板</h3>
+                        <span class="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-200">連線成功</span>
+                    </div>
+                    <p class="text-xs text-gray-500 leading-relaxed">
+                        當前系統已對齊手機環境。現場撿貨作業時，系統將自動擷取您的專屬整數主鍵 ID 寫入 <code>pallet_orders.picker_id</code>。
+                    </p>
+                    <div class="p-3 bg-slate-50 border border-gray-200 rounded-lg text-center font-mono text-xs text-gray-400 py-6">
+                        <i class="fa-solid fa-barcode text-3xl text-gray-300 block mb-2 animate-pulse"></i>
+                        等待承接 PDA 手機端雷射槍訊號...
+                    </div>
+                </div>
+            </section>
+
+            <section id="page-password-change" class="page-view hidden space-y-3">
+                <div class="bg-white p-4 rounded-xl shadow-xs border border-gray-200/60 space-y-4">
+                    <h3 class="text-sm font-black text-slate-800"><i class="fa-solid fa-shield-keyhole text-rose-500 mr-1"></i> 安全密碼變更</h3>
+                    
+                    <div id="pwd-admin-selector" class="hidden">
+                        <label class="block text-[11px] font-bold text-gray-500 mb-1">重設對象 (管理者專屬)</label>
+                        <select id="pwd-target-user-id" class="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono bg-gray-50 h-10"></select>
+                    </div>
+
+                    <div id="pwd-picker-hint" class="text-[11px] bg-slate-50 p-2.5 rounded-lg border text-gray-500">
+                        <i class="fa-solid fa-user-lock mr-1 text-gray-400"></i> 您目前為撿貨員，此操作將直接修改您的個人密碼。
+                    </div>
+
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-500 mb-1">輸入新密碼</label>
+                            <input type="password" id="pwd-new" class="w-full border border-gray-200 rounded-lg p-2.5 text-xs font-mono h-10" placeholder="設定新安全密碼">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-500 mb-1">確認新密碼</label>
+                            <input type="password" id="pwd-confirm" class="w-full border border-gray-200 rounded-lg p-2.5 text-xs font-mono h-10" placeholder="再次確認密碼">
+                        </div>
+                        <button onclick="executeChangePassword()" class="w-full h-11 bg-indigo-600 active:bg-indigo-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer">
+                            <i class="fa-solid fa-floppy-disk mr-0.5"></i> 確定儲存變更
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14";
+
+        let currentUserSession = { id: null, username: "", display_name: "", role: "" };
+
+        // 📱 開關抽屜選單（支援手機觸控體驗）
+        function toggleDrawer(isOpen) {
+            const menu = document.getElementById("drawer-menu");
+            const overlay = document.getElementById("drawer-overlay");
+            if (isOpen) {
+                menu.classList.remove("-translate-x-full");
+                overlay.classList.remove("hidden");
+            } else {
+                menu.classList.add("-translate-x-full");
+                overlay.classList.add("hidden");
+            }
+        }
+
+        // 核心登入驗證
+        async function handleLogin() {
+            const userIn = document.getElementById("auth-user").value.trim();
+            const passIn = document.getElementById("auth-pass").value.trim();
+            const errDiv = document.getElementById("auth-err");
+            const errTxt = document.getElementById("auth-err-text");
+            const btn = document.getElementById("btn-login");
+
+            if (!userIn || !passIn) { alert("欄位不能留空！"); return; }
+            errDiv.classList.add("hidden");
+            btn.disabled = true;
+            btn.innerText = "驗證安全權限中...";
+
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/users?username=eq.${encodeURIComponent(userIn)}&select=*`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                });
+                if(!response.ok) throw new Error("資料庫響應異常");
+
+                const matchedUsers = await response.json();
+
+                if (matchedUsers.length > 0 && String(matchedUsers[0].password) === String(passIn)) {
+                    const uData = matchedUsers[0];
+                    currentUserSession.id = parseInt(uData.id);
+                    currentUserSession.username = uData.username;
+                    currentUserSession.display_name = uData.display_name || uData.name || uData.username;
+                    currentUserSession.role = uData.role ? uData.role.toLowerCase() : "picker";
+
+                    setupRolePermissions();
+                } else {
+                    throw new Error("工號不存在或密碼錯誤。");
+                }
+            } catch (err) {
+                errDiv.classList.remove("hidden");
+                errTxt.innerText = err.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "驗證並登入";
+            }
+        }
+
+        // 行動版權限過濾機制
+        function setupRolePermissions() {
+            const role = currentUserSession.role;
+            document.getElementById("side-user-name").innerText = currentUserSession.display_name;
+            document.getElementById("side-user-role").innerText = role === "admin" ? "⚙️ 系統管理者" : "📦 現場撿貨員";
+            document.getElementById("user-initial").innerText = currentUserSession.display_name.charAt(0);
+
+            if (role === "admin") {
+                document.getElementById("nav-orders-mgmt").classList.remove("hidden");
+                document.getElementById("nav-orders-query").classList.remove("hidden");
+                document.getElementById("nav-users-mgmt").classList.remove("hidden");
+                switchPage("orders-mgmt");
+            } else {
+                document.getElementById("nav-orders-mgmt").classList.add("hidden");
+                document.getElementById("nav-orders-query").classList.add("hidden");
+                document.getElementById("nav-users-mgmt").classList.add("hidden");
+                switchPage("picking-ops");
+            }
+
+            document.getElementById("auth-screen").classList.add("hidden");
+            document.getElementById("main-app").classList.remove("hidden");
+        }
+
+        // 頁面切換 + 抽屜連動關閉 + 安全防跳關機制
+        function switchPage(pageId) {
+            if (currentUserSession.role !== "admin" && ["orders-mgmt", "orders-query", "users-mgmt"].includes(pageId)) {
+                alert("🚫 權限等級不足！");
+                return;
+            }
+
+            toggleDrawer(false); // 點選選單項目後，自動關閉手機側滑選單
+
+            document.querySelectorAll(".page-view").forEach(p => p.classList.add("hidden"));
+            document.querySelectorAll(".nav-item").forEach(btn => {
+                btn.classList.remove("bg-indigo-600", "text-white");
+            });
+
+            document.getElementById(`page-${pageId}`).classList.remove("hidden");
+            const activeBtn = document.getElementById(`nav-${pageId}`);
+            if(activeBtn) activeBtn.classList.add("bg-indigo-600", "text-white");
+
+            const titleMap = {
+                "orders-mgmt": "1. 訂單管理中樞",
+                "orders-query": "2. 波次訂單查詢",
+                "users-mgmt": "3. 帳號人員管理",
+                "picking-ops": "4. 現場撿貨作業",
+                "password-change": "5. 安全密碼變更"
+            };
+            document.getElementById("header-subtitle").innerText = titleMap[pageId] || "WMS";
+
+            if (pageId === "orders-query") fetchQueryOrders();
+            if (pageId === "users-mgmt") fetchUsersList();
+            if (pageId === "password-change") preparePasswordPage();
+        }
+
+        // 頁面 2: 行動端卡片化渲染 (防表格破版)
+        async function fetchQueryOrders() {
+            const box = document.getElementById("card-list-orders");
+            box.innerHTML = `<div class="text-center text-xs text-gray-400 py-4 animate-pulse">正在讀取雲端資料...</div>`;
+
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/pallet_orders?order=id.asc`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                });
+                const orders = await response.json();
+                
+                box.innerHTML = "";
+                orders.forEach(o => {
+                    const card = document.createElement("div");
+                    card.className = "bg-white p-3 rounded-xl border border-gray-200/80 shadow-xs space-y-2";
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-mono font-bold text-indigo-600">${o.pallet_no || '未編號'}</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-gray-100 font-bold text-gray-600">${o.status || '待撿貨'}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-1 text-[11px] text-gray-500 font-medium">
+                            <div>出貨廠商: <span class="text-gray-800">${o.ship_vendor || '-'}</span></div>
+                            <div class="text-right">整數 Picker ID: <span class="font-mono text-amber-700 font-bold">${o.picker_id || '未指派'}</span></div>
+                        </div>
+                    `;
+                    box.appendChild(card);
+                });
+            } catch(e) { box.innerHTML = `<div class="text-xs text-red-500 p-2">同步失敗</div>`; }
+        }
+
+        // 頁面 3: 行動端人員卡片化渲染
+        async function fetchUsersList() {
+            const box = document.getElementById("card-list-users");
+            box.innerHTML = `<div class="text-center text-xs text-gray-400 py-4">正在加載架構人員...</div>`;
+
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/users?order=id.asc`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                });
+                const users = await response.json();
+                
+                box.innerHTML = "";
+                users.forEach(u => {
+                    const card = document.createElement("div");
+                    card.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-xs flex justify-between items-center";
+                    
+                    let roleTag = String(u.role).toLowerCase() === 'admin' ? 
+                        `<span class="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold border border-indigo-100">Admin</span>` : 
+                        `<span class="text-[10px] bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded border border-gray-200">Picker</span>`;
+
+                    card.innerHTML = `
+                        <div class="space-y-0.5">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-sm font-black text-slate-800">${u.username}</span>
+                                <span class="text-xs text-gray-400 font-sans">(${u.display_name || u.name || '-'})</span>
+                                ${roleTag}
+                            </div>
+                            <p class="text-[10px] text-gray-400 font-mono">系統目前明碼: ${u.password}</p>
+                        </div>
+                        <div class="text-right bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shrink-0">
+                            <p class="text-[9px] text-emerald-600 font-bold uppercase tracking-wider">整數主鍵</p>
+                            <p class="text-sm font-mono font-black text-emerald-700">${u.id}</p>
+                        </div>
+                    `;
+                    box.appendChild(card);
+                });
+            } catch(e) { box.innerHTML = `<div class="text-xs text-red-500">加載失敗</div>`; }
+        }
+
+        // 頁面 5: 變更密碼初始化
+        async function preparePasswordPage() {
+            const adminSelector = document.getElementById("pwd-admin-selector");
+            const pickerHint = document.getElementById("pwd-picker-hint");
+            const selectEl = document.getElementById("pwd-target-user-id");
+            
+            document.getElementById("pwd-new").value = "";
+            document.getElementById("pwd-confirm").value = "";
+
+            if (currentUserSession.role === "admin") {
+                adminSelector.classList.remove("hidden");
+                pickerHint.classList.add("hidden");
+                selectEl.innerHTML = `<option value="">人員加載中...</option>`;
+                try {
+                    const response = await fetch(`${SUPABASE_URL}/rest/v1/users?order=id.asc`, {
+                        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                    });
+                    const users = await response.json();
+                    selectEl.innerHTML = "";
+                    users.forEach(u => {
+                        const opt = document.createElement("option");
+                        opt.value = u.id;
+                        opt.innerText = `[ID: ${u.id}] ${u.username} (${u.display_name || u.name || ''})`;
+                        if (parseInt(u.id) === currentUserSession.id) opt.selected = true;
+                        selectEl.appendChild(opt);
+                    });
+                } catch(e) { selectEl.innerHTML = `<option value="">人員加載失敗</option>`; }
+            } else {
+                adminSelector.classList.add("hidden");
+                pickerHint.classList.remove("hidden");
+            }
+        }
+
+        // 頁面 5: 執行更新密碼
+        async function executeChangePassword() {
+            const newPwd = document.getElementById("pwd-new").value.trim();
+            const confirmPwd = document.getElementById("pwd-confirm").value.trim();
+
+            if (!newPwd || !confirmPwd) { alert("欄位不能為空！"); return; }
+            if (newPwd !== confirmPwd) { alert("❌ 兩次輸入密碼不一致。"); return; }
+
+            let targetUserId = currentUserSession.id;
+            if (currentUserSession.role === "admin") {
+                const selectedVal = document.getElementById("pwd-target-user-id").value;
+                if (!selectedVal) { alert("請選擇人員！"); return; }
+                targetUserId = parseInt(selectedVal);
+            }
+
+            if(!confirm("確定要提交此密碼並覆寫雲端資料庫嗎？")) return;
+
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${targetUserId}`, {
+                    method: "PATCH",
+                    headers: {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": `Bearer ${SUPABASE_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ password: newPwd })
+                });
+                if (!response.ok) throw new Error("資料庫拒絕更新");
+
+                alert("🎉 密碼已成功變更！");
+                document.getElementById("pwd-new").value = "";
+                document.getElementById("pwd-confirm").value = "";
+                if (currentUserSession.role === "admin") fetchUsersList();
+            } catch (err) { alert(`❌ 更新異常：${err.message}`); }
+        }
+
+        function handleLogout() {
+            currentUserSession = { id: null, username: "", display_name: "", role: "" };
+            document.getElementById("auth-user").value = "";
+            document.getElementById("auth-pass").value = "";
+            document.getElementById("auth-screen").classList.remove("hidden");
+            document.getElementById("main-app").classList.add("hidden");
+            toggleDrawer(false);
+        }
+
+        // 頂部手機即時時鐘
+        setInterval(() => {
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            document.getElementById("sys-clock").innerText = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        }, 1000);
+
+        document.getElementById("auth-pass").addEventListener("keyup", (e) => {
+            if(e.key === "Enter") handleLogin();
+        });
+    </script>
+</body>
+</html>
