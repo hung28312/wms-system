@@ -154,7 +154,7 @@
         let cachePallets = [];
         let currentPalletItems = [];
 
-        // 🔐 連線雲端進行成員密碼比對
+        // 🔐 登入驗證
         async function loginVerify() {
             const userField = document.getElementById("login-user");
             const passField = document.getElementById("login-pass");
@@ -194,7 +194,6 @@
                     let finalDisplayName = userRawData.display_name || userRawData.name || username;
                     
                     document.getElementById("user-badge").innerText = `👤 ${finalDisplayName}`;
-                    
                     document.getElementById("page-login").classList.add("hidden");
                     document.getElementById("app-header").classList.remove("hidden");
                     document.getElementById("page-orders").classList.remove("hidden");
@@ -220,7 +219,6 @@
             }
         }
 
-        // 綁定鍵盤 Enter 鍵
         document.getElementById("login-pass").addEventListener("keyup", (e) => {
             if (e.key === "Enter") loginVerify();
         });
@@ -233,7 +231,7 @@
             document.getElementById("login-user").focus();
         }
 
-        // 🔄 載入出貨訂單與所屬棧板
+        // 🔄 載入單據
         async function loadOrdersAndPallets() {
             const container = document.getElementById("order-list");
             const loader = document.getElementById("loader-orders");
@@ -246,7 +244,6 @@
             icon.classList.add("animate-spin");
 
             try {
-                // 升序 asc 排序，讓 #1 到 #4 順序正確
                 const response = await fetch(`${SUPABASE_URL}/rest/v1/pallet_orders?order=id.asc`, {
                     headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
                 });
@@ -320,7 +317,7 @@
             } catch (err) {
                 errCard.classList.remove("hidden");
                 document.getElementById("api-error-text").innerText = err.message;
-            } finally { // 🎯 修正處：這裡已更正為 finally
+            } finally {
                 loader.classList.add("hidden");
                 icon.classList.remove("animate-spin");
             }
@@ -359,11 +356,10 @@
                 if (!response.ok) throw new Error("物料明細撈取失敗");
                 const rawItems = await response.json();
 
-                // 雙排序演算法：單位重量由大到小排序 ➔ 同品項時效期早的(FIFO)在前面
+                // 雙排序：單位重量(大➔小) ➔ 品項效期FIFO
                 rawItems.sort((a, b) => {
                     const weightA = parseFloat(a.unit_weight) || 0;
                     const weightB = parseFloat(b.unit_weight) || 0;
-                    
                     if (weightB !== weightA) {
                         return weightB - weightA;
                     } else {
@@ -373,19 +369,23 @@
                     }
                 });
 
-                currentPalletItems = rawItems;
+                // 💡 關鍵更動一：為每一筆載入的物料，在記憶體內初始化「已撿件數」為 0
+                currentPalletItems = rawItems.map(item => ({
+                    ...item,
+                    qty_picked_pcs: 0 
+                }));
 
-                rawItems.forEach((item, index) => {
+                currentPalletItems.forEach((item, index) => {
                     const itemCard = document.createElement("div");
                     itemCard.id = `picker-row-${index}`;
-                    itemCard.className = "bg-white rounded-xl shadow-xs border border-gray-200 p-4 space-y-3 relative overflow-hidden";
+                    itemCard.className = "bg-white rounded-xl shadow-xs border border-gray-200 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
                     
                     const hasExp = !!item.exp_date;
                     let expHtml = "";
 
                     if (hasExp) {
                         expHtml = `
-                            <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 規劃效期:</span>
+                            <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 產品效期:</span>
                             <span class="text-sm font-mono text-red-600 font-bold">${item.exp_date}</span>
                         `;
                     } else {
@@ -399,6 +399,9 @@
                             </div>
                         `;
                     }
+
+                    // 💡 關鍵更動二：重構進度卡片區塊，加入當前進度與計數器樣式
+                    const targetPcs = parseInt(item.qty_target_pcs) || 0;
 
                     itemCard.innerHTML = `
                         <div class="flex justify-between items-center">
@@ -424,14 +427,18 @@
                                 <p class="text-[10px] text-gray-400 font-medium">訂單原始數</p>
                                 <p class="text-sm font-bold font-mono text-gray-600 mt-0.5">${item.qty_order || '0'}</p>
                             </div>
-                            <div class="text-center bg-green-50 p-1.5 rounded-lg border border-green-100">
-                                <p class="text-[10px] text-green-600 font-medium">拆分總件數</p>
-                                <p class="text-sm font-black font-mono text-green-700 mt-0.5">${item.qty_target_pcs || '0'} 件</p>
+                            <div id="progress-box-${index}" class="text-center bg-gray-100 p-1.5 rounded-lg border border-gray-300 transition-colors">
+                                <p class="text-[10px] text-gray-500 font-medium">點收進度</p>
+                                <p class="text-sm font-black font-mono mt-0.5">
+                                    <span id="picked-pcs-${index}" class="text-blue-600">0</span> 
+                                    <span class="text-gray-400">/</span> 
+                                    <span class="text-gray-800">${targetPcs} 件</span>
+                                </p>
                             </div>
                         </div>
 
-                        <button onclick="markChecked(${index})" id="btn-check-${index}" class="w-full mt-2 bg-gray-800 active:bg-green-700 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1">
-                            <i class="fa-solid fa-square-check"></i> 點擊確認點收
+                        <button onclick="addPickCount(${index})" id="btn-check-${index}" class="w-full mt-2 bg-gray-800 active:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1 transition-colors">
+                            <i class="fa-solid fa-plus-circle"></i> 手動點收一件 (+1)
                         </button>
                     `;
                     listContainer.appendChild(itemCard);
@@ -451,7 +458,7 @@
             }
         }
 
-        // 💾 核心功能：選定效期回存 Supabase 雲端資料庫
+        // 💾 效期回存
         async function updateExpiry(itemId, index) {
             const dateInput = document.getElementById(`input-exp-${itemId}`);
             const btnSave = document.getElementById(`btn-save-exp-${itemId}`);
@@ -477,9 +484,7 @@
                         "Content-Type": "application/json",
                         "Prefer": "return=minimal"
                     },
-                    body: JSON.stringify({
-                        exp_date: selectedDate
-                    })
+                    body: JSON.stringify({ exp_date: selectedDate })
                 });
 
                 if (!response.ok) {
@@ -495,11 +500,10 @@
                     <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 規劃效期:</span>
                     <span class="text-sm font-mono text-red-600 font-bold">${selectedDate}</span>
                 `;
-                
                 alert("🎉 效期已成功儲存至雲端！");
 
             } catch (error) {
-                alert(`❌ 儲存失敗！\n原因：${error.message}\n\n(提示: 請檢查 RLS 政策是否開啟 UPDATE 權限，或欄位名是否正確)`);
+                alert(`❌ 儲存失敗！\n原因：${error.message}`);
                 dateInput.disabled = false;
                 btnSave.disabled = false;
                 btnSave.innerHTML = originalHtml;
@@ -508,20 +512,52 @@
             }
         }
 
-        function markChecked(index) {
-            const card = document.getElementById(`picker-row-${index}`);
-            const btn = document.getElementById(`btn-check-${index}`);
-            if(!card || !btn) return;
+        // 💡 關鍵更動三：全新開發的逐件加碼邏輯
+        function addPickCount(index) {
+            const item = currentPalletItems[index];
+            if (!item) return;
 
-            card.classList.toggle("opacity-50");
-            card.classList.toggle("border-green-500");
+            const targetPcs = parseInt(item.qty_target_pcs) || 0;
             
-            if(btn.classList.contains("bg-green-600")) {
-                btn.className = "w-full mt-2 bg-gray-800 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1";
-                btn.innerHTML = `<i class="fa-solid fa-square-check"></i> 點擊確認點收`;
+            // 如果已經滿了，不再往上加
+            if (item.qty_picked_pcs >= targetPcs) return;
+
+            // 累加數量
+            item.qty_picked_pcs += 1;
+
+            // 取得 UI 元素
+            const card = document.getElementById(`picker-row-${index}`);
+            const countText = document.getElementById(`picked-pcs-${index}`);
+            const progressBox = document.getElementById(`progress-box-${index}`);
+            const btn = document.getElementById(`btn-check-${index}`);
+
+            // 更新數字
+            countText.innerText = item.qty_picked_pcs;
+
+            // 檢查是否剛好集滿（當次完工）
+            if (item.qty_picked_pcs === targetPcs) {
+                // 發出清脆成功提示聲 (高頻)
+                playBeep(1200, 0.15);
+
+                // 卡片外框變綠、半透明結案
+                card.classList.remove("border-gray-200");
+                card.classList.add("border-green-500", "bg-green-50/20", "opacity-50");
+
+                // 進度小框變綠
+                progressBox.className = "text-center bg-green-100 p-1.5 rounded-lg border border-green-300 text-green-800";
+                countText.className = "text-green-700 font-black";
+
+                // 按鈕改為打勾已完成狀態並停用
+                btn.className = "w-full mt-2 bg-green-600 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1 cursor-not-allowed";
+                btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> 本品項已全數點收`;
+                btn.onclick = null; // 移除手動點擊事件
             } else {
-                btn.className = "w-full mt-2 bg-green-600 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1";
-                btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> 點收完成`;
+                // 還沒集滿：發出短暫普通的確認聲，提示有刷進去
+                playBeep(900, 0.05);
+
+                // 進度小框變為閃爍藍色，提示正在累加
+                progressBox.className = "text-center bg-blue-50 p-1.5 rounded-lg border border-blue-400";
+                countText.className = "text-blue-600 font-black text-base animate-pulse";
             }
         }
 
@@ -550,6 +586,7 @@
             }
         });
 
+        // 槍訊號 Enter 攔截處理
         document.addEventListener("keyup", (e) => {
             const scanInput = document.getElementById("pda-scan-input");
             if (!scanInput || document.getElementById("page-picking").classList.contains("hidden")) return;
@@ -563,21 +600,25 @@
                 let foundIndex = -1;
                 for (let i = 0; i < currentPalletItems.length; i++) {
                     const item = currentPalletItems[i];
-                    const btn = document.getElementById(`btn-check-${i}`);
+                    const targetPcs = parseInt(item.qty_target_pcs) || 0;
                     
-                    if (item.item_no === barcode && btn && !btn.classList.contains("bg-green-600")) {
+                    // 💡 核心比對邏輯修正：條碼符合，且「已撿件數小於目標件數」的品項才叫命中！
+                    if (item.item_no === barcode && item.qty_picked_pcs < targetPcs) {
                         foundIndex = i;
                         break; 
                     }
                 }
 
                 if (foundIndex !== -1) {
-                    playBeep(1200, 0.1);
-                    markChecked(foundIndex);
+                    // 執行逐件累加與畫面變更
+                    addPickCount(foundIndex);
+                    
+                    // 視圖自動捲動定位
                     document.getElementById(`picker-row-${foundIndex}`).scrollIntoView({ behavior: 'smooth', block: 'center' });
                 } else {
+                    // 比對失敗或全滿，發出沉悶錯誤聲
                     playBeep(300, 0.3);
-                    alert(`⚠️ 條碼 [${barcode}] 比對失敗！\n原因可能是：\n1. 本棧板無此品項\n2. 該品項已全數點收完成`);
+                    alert(`⚠️ 條碼 [${barcode}] 比對失敗！\n原因可能是：\n1. 本棧板無此品項\n2. 該品項的拆分總件數已全數刷讀扣完`);
                 }
                 
                 scanInput.focus();
