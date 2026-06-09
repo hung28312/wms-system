@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WMS PDA 行動安全撿貨系統 (相機掃描連續流版)</title>
+    <title>WMS PDA 行動安全撿貨系統 (相機流暢連續掃描版)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -15,7 +15,7 @@
         .error-flash {
             animation: pulse-red 0.4s ease-in-out 3;
         }
-        /* 調整 html5-qrcode 內部控制項 */
+        /* 調整 html5-qrcode 內部控制項，美化介面 */
         #qr-reader button {
             background-color: #3b82f6;
             color: white;
@@ -27,6 +27,10 @@
             cursor: pointer;
         }
         #qr-reader img { display: none !important; }
+        /* 讓掃描框維持錄影的活體動態，不結凍 */
+        #qr-reader video {
+            object-fit: cover !important;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900 font-sans antialiased select-none">
@@ -49,7 +53,7 @@
                 <div class="w-14 h-14 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto text-2xl">
                     <i class="fa-solid fa-shield-halved"></i>
                 </div>
-                <h2 class="text-xl font-bold">WMS 安全驗證登入</h2>
+                <h2 class="text-xl font-bold">WMS 安全驗證登入1</h2>
                 <p class="text-xs text-gray-400">請輸入或掃描人員工號與密碼</p>
             </div>
             
@@ -146,6 +150,8 @@
             </div>
 
             <div class="bg-blue-50 border border-blue-200 rounded-xl p-2.5 space-y-2 shadow-xs">
+                <div id="scan-feedback-bar" class="hidden text-center text-xs font-bold p-2 rounded-lg shadow-sm transition-all"></div>
+
                 <div class="flex items-center gap-2">
                     <div class="text-blue-600 animate-pulse shrink-0 pl-1">
                         <i class="fa-solid fa-expand text-base"></i>
@@ -165,8 +171,8 @@
             </div>
 
             <p class="text-xs font-bold text-gray-500 px-1 flex justify-between">
-                <span>💡 排序：單位重量(大➔小) + 品項效期FIFO</span>
-                <span class="text-blue-600 font-mono">順序: #1 ➔ #4 升序</span>
+                <span>💡 排序：重量(大➔小) + FIFO效期</span>
+                <span class="text-blue-600 font-mono">順序已鎖定</span>
             </p>
 
             <div id="loader-items" class="hidden text-center py-8 space-y-2">
@@ -192,6 +198,7 @@
         let currentPalletId = null;
 
         let html5QrScanner = null;
+        let isProcessingScan = false; // 防重覆觸發鎖
 
         // 🔐 登入驗證
         async function loginVerify() {
@@ -277,7 +284,7 @@
             document.getElementById("login-user").focus();
         }
 
-        // 🔄 【第一層】載入訂單波次清單
+        // 🔄 載入訂單波次清單
         async function loadOrders() {
             const container = document.getElementById("order-list");
             const loader = document.getElementById("loader-orders");
@@ -293,19 +300,10 @@
                 const response = await fetch(`${SUPABASE_URL}/rest/v1/orders?order=id.asc`, {
                     headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
                 });
-                
-                if (!response.ok) {
-                    const errDetail = await response.text();
-                    throw new Error(errDetail);
-                }
-                
+                if (!response.ok) throw new Error(await response.text());
                 const allOrders = await response.json();
 
-                const activeOrders = allOrders.filter(order => {
-                    const picked = parseInt(order.pallets_picked) || 0;
-                    const total = parseInt(order.total_pallets) || 0;
-                    return picked < total;
-                });
+                const activeOrders = allOrders.filter(order => (parseInt(order.pallets_picked) || 0) < (parseInt(order.total_pallets) || 0));
 
                 if (activeOrders.length === 0) {
                     container.innerHTML = `<div class="text-center py-12 text-gray-400 italic bg-white rounded-xl border border-dashed border-gray-300">🎉 目前沒有待處理的未完工波次！</div>`;
@@ -337,7 +335,6 @@
                     `;
                     container.appendChild(card);
                 });
-
             } catch (err) {
                 errCard.classList.remove("hidden");
                 document.getElementById("api-error-text").innerText = err.message;
@@ -347,11 +344,10 @@
             }
         }
 
-        // 📂 【第二層】動態抓取該單據下的所有棧板
+        // 📂 動態抓取該單據下的所有棧板
         async function toggleOrderGroup(orderId) {
             const subBox = document.getElementById(`sub-pallets-${orderId}`);
             const arrow = document.getElementById(`arrow-${orderId}`);
-            
             if (!subBox || !arrow) return;
 
             const isHidden = subBox.classList.contains("hidden");
@@ -363,12 +359,10 @@
                     const response = await fetch(`${SUPABASE_URL}/rest/v1/pallet_orders?order_id=eq.${orderId}&order=id.asc`, {
                         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
                     });
-                    
                     if (!response.ok) throw new Error("撈取關聯棧板失敗");
                     const childPallets = await response.json();
 
                     subBox.innerHTML = ""; 
-                    
                     if (childPallets.length === 0) {
                         subBox.innerHTML = `<div class="p-3 text-center text-xs text-gray-400 italic">⚠️ 本波次單據底下無配置任何棧板</div>`;
                         return;
@@ -403,14 +397,13 @@
                         `;
                         subBox.appendChild(row);
                     });
-
                 } catch (err) {
                     subBox.innerHTML = `<div class="p-3 text-xs text-red-500 bg-red-50 font-mono">❌ 讀取失敗: ${err.message}</div>`;
                 }
             }
         }
 
-        // 🎯 【第三層】進入明細撿貨頁面
+        // 🎯 進入明細撿貨頁面
         async function startPicking(palletId) {
             currentPalletId = palletId;
             const pInfo = activePalletObject;
@@ -439,22 +432,15 @@
                 if (!response.ok) throw new Error("物料明細撈取失敗");
                 const rawItems = await response.json();
 
+                // 💡 FIFO 與重量排序
                 rawItems.sort((a, b) => {
                     const weightA = parseFloat(a.unit_weight) || 0;
                     const weightB = parseFloat(b.unit_weight) || 0;
-                    if (weightB !== weightA) {
-                        return weightB - weightA;
-                    } else {
-                        const dateA = a.exp_date || "9999-12-31";
-                        const dateB = b.exp_date || "9999-12-31";
-                        return dateA.localeCompare(dateB);
-                    }
+                    if (weightB !== weightA) return weightB - weightA;
+                    return (a.exp_date || "9999-12-31").localeCompare(b.exp_date || "9999-12-31");
                 });
 
-                currentPalletItems = rawItems.map(item => ({
-                    ...item,
-                    qty_picked_pcs: parseInt(item.qty_picked_pcs) || 0 
-                }));
+                currentPalletItems = rawItems.map(item => ({ ...item, qty_picked_pcs: parseInt(item.qty_picked_pcs) || 0 }));
 
                 currentPalletItems.forEach((item, index) => {
                     const itemCard = document.createElement("div");
@@ -462,7 +448,6 @@
                     
                     const targetPcs = parseInt(item.qty_target_pcs) || 0;
                     const isDone = item.qty_picked_pcs >= targetPcs && targetPcs > 0;
-                    
                     const hasNoExp = !item.exp_date || item.exp_date.trim() === "" || item.exp_date === "-" || item.exp_date.includes("請先設定");
                     
                     if (isDone) {
@@ -473,46 +458,28 @@
                         itemCard.className = "bg-white rounded-xl shadow-xs border border-gray-200 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
                     }
                     
-                    const hasExp = !hasNoExp;
-                    let expHtml = "";
+                    let expHtml = !hasNoExp ? `
+                        <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 產品效期:</span>
+                        <span class="text-sm font-mono text-red-600 font-bold">${item.exp_date}</span>
+                    ` : `
+                        <div class="flex items-center gap-2 w-full">
+                            <span class="text-xs text-red-600 font-bold shrink-0 animate-pulse"><i class="fa-solid fa-triangle-exclamation"></i> 請設定效期:</span>
+                            <input type="date" id="input-exp-${item.id}" class="text-xs border border-amber-300 rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 font-mono bg-white grow">
+                            <button onclick="updateExpiry(${item.id}, ${index})" id="btn-save-exp-${item.id}" class="bg-amber-600 active:bg-amber-700 text-white text-xs font-bold px-2.5 py-1.5 rounded shadow-xs shrink-0 flex items-center gap-1">
+                                <i class="fa-solid fa-floppy-disk"></i> 儲存
+                            </button>
+                        </div>
+                    `;
 
-                    if (hasExp) {
-                        expHtml = `
-                            <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 產品效期:</span>
-                            <span class="text-sm font-mono text-red-600 font-bold">${item.exp_date}</span>
-                        `;
-                    } else {
-                        expHtml = `
-                            <div class="flex items-center gap-2 w-full">
-                                <span class="text-xs text-red-600 font-bold shrink-0 animate-pulse"><i class="fa-solid fa-triangle-exclamation"></i> 請設定效期:</span>
-                                <input type="date" id="input-exp-${item.id}" class="text-xs border border-amber-300 rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 font-mono bg-white grow">
-                                <button onclick="updateExpiry(${item.id}, ${index})" id="btn-save-exp-${item.id}" class="bg-amber-600 active:bg-amber-700 text-white text-xs font-bold px-2.5 py-1.5 rounded shadow-xs shrink-0 flex items-center gap-1">
-                                    <i class="fa-solid fa-floppy-disk"></i> 儲存
-                                </button>
-                            </div>
-                        `;
-                    }
-
-                    let progressBoxClass = "text-center bg-gray-100 p-1.5 rounded-lg border border-gray-300";
-                    let countTextClass = "text-blue-600";
-                    let btnHtml = `<i class="fa-solid fa-plus-circle"></i> 手動點收一件 (+1)`;
-                    let btnClass = "w-full mt-2 bg-gray-800 active:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1 transition-colors";
-                    let btnAction = `onclick="addPickCount(${index})"`;
-
-                    if (isDone) {
-                        progressBoxClass = "text-center bg-green-100 p-1.5 rounded-lg border border-green-300 text-green-800";
-                        countTextClass = "text-green-700 font-black";
-                        btnHtml = `<i class="fa-solid fa-circle-check"></i> 本品項已全數點收`;
-                        btnClass = "w-full mt-2 bg-green-600 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1 cursor-not-allowed";
-                        btnAction = "";
-                    }
+                    let progressBoxClass = isDone ? "text-center bg-green-100 p-1.5 rounded-lg border border-green-300 text-green-800" : "text-center bg-gray-100 p-1.5 rounded-lg border border-gray-300";
+                    let countTextClass = isDone ? "text-green-700 font-black" : "text-blue-600";
+                    let btnHtml = isDone ? `<i class="fa-solid fa-circle-check"></i> 本品項已全數點收` : `<i class="fa-solid fa-plus-circle"></i> 手動點收一件 (+1)`;
+                    let btnClass = isDone ? "w-full mt-2 bg-green-600 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1 cursor-not-allowed" : "w-full mt-2 bg-gray-800 active:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1 transition-colors";
+                    let btnAction = isDone ? "" : `onclick="addPickCount(${index})"`;
 
                     let itemStatusBadge = `<span id="item-status-badge-${index}" class="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-gray-100 text-gray-500">${item.status || '待撿貨'}</span>`;
-                    if (item.status === "撿貨中") {
-                        itemStatusBadge = `<span id="item-status-badge-${index}" class="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-blue-100 text-blue-700">撿貨中</span>`;
-                    } else if (item.status === "已完成" || isDone) {
-                        itemStatusBadge = `<span id="item-status-badge-${index}" class="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-green-100 text-green-700">已完成</span>`;
-                    }
+                    if (item.status === "撿貨中") itemStatusBadge = `<span id="item-status-badge-${index}" class="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-blue-100 text-blue-700">撿貨中</span>`;
+                    if (item.status === "已完成" || isDone) itemStatusBadge = `<span id="item-status-badge-${index}" class="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-green-100 text-green-700">已完成</span>`;
 
                     itemCard.innerHTML = `
                         <div class="flex justify-between items-center">
@@ -522,16 +489,13 @@
                             </div>
                             <span class="text-xs bg-blue-50 text-blue-700 font-mono font-bold px-2 py-0.5 rounded border border-blue-100">單箱重: ${item.unit_weight || 0} kg</span>
                         </div>
-                        
                         <div class="space-y-0.5">
                             <p class="text-xs font-mono tracking-wide text-gray-400 font-bold">${item.item_no || '-'}</p>
                             <h4 class="text-base font-black text-gray-900 tracking-tight leading-tight">${item.item_name || '-'}</h4>
                         </div>
-
                         <div id="exp-block-${item.id}" class="bg-gray-50 p-2 rounded-lg flex justify-between items-center border border-gray-100">
                             ${expHtml}
                         </div>
-
                         <div class="grid grid-cols-3 gap-2 pt-1">
                             <div class="text-center bg-blue-50/50 p-1.5 rounded-lg border border-blue-100/60">
                                 <p class="text-[10px] text-blue-500 font-medium">預計撿貨數</p>
@@ -550,7 +514,6 @@
                                 </p>
                             </div>
                         </div>
-
                         <button id="btn-check-${index}" ${btnAction} class="${btnClass}">
                             ${btnHtml}
                         </button>
@@ -558,10 +521,7 @@
                     listContainer.appendChild(itemCard);
                 });
 
-                if(rawItems.length === 0) {
-                    listContainer.innerHTML = `<div class="text-center py-12 text-gray-400 italic">此棧板無明細資料</div>`;
-                }
-
+                if(rawItems.length === 0) listContainer.innerHTML = `<div class="text-center py-12 text-gray-400 italic">此棧板無明細資料</div>`;
                 focusScanInput();
 
             } catch (err) {
@@ -586,7 +546,6 @@
 
             dateInput.disabled = true;
             btnSave.disabled = true;
-            const originalHtml = btnSave.innerHTML;
             btnSave.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i>`;
 
             try {
@@ -599,12 +558,9 @@
                     },
                     body: JSON.stringify({ exp_date: selectedDate })
                 });
-
                 if (!response.ok) throw new Error("雲端資料庫更新效期失敗");
 
-                if (currentPalletItems[index]) {
-                    currentPalletItems[index].exp_date = selectedDate;
-                }
+                if (currentPalletItems[index]) currentPalletItems[index].exp_date = selectedDate;
 
                 expBlock.innerHTML = `
                     <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 產品效期:</span>
@@ -612,18 +568,35 @@
                 `;
 
                 const card = document.getElementById(`picker-row-${index}`);
-                if (card) {
-                    card.className = "bg-white rounded-xl shadow-xs border border-gray-200 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
-                }
+                if (card) card.className = "bg-white rounded-xl shadow-xs border border-gray-200 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
 
+                showScanFeedback(`✅ 效期設定成功！請再次掃描條碼點收。`, "success");
             } catch (error) {
                 alert(`❌ 儲存失敗！\n原因：${error.message}`);
                 dateInput.disabled = false;
                 btnSave.disabled = false;
-                btnSave.innerHTML = originalHtml;
+                btnSave.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> 儲存`;
             } finally {
                 focusScanInput();
             }
+        }
+
+        // 🔊 頂部動態非阻斷提示條（取代 alert 讓相機不凍結）
+        function showScanFeedback(text, type) {
+            const bar = document.getElementById("scan-feedback-bar");
+            if (!bar) return;
+
+            bar.classList.remove("hidden", "bg-green-500", "bg-red-500", "bg-amber-500", "text-white");
+            bar.innerText = text;
+
+            if (type === "success") bar.classList.add("bg-green-500", "text-white");
+            if (type === "error") bar.classList.add("bg-red-500", "text-white");
+            if (type === "warn") bar.classList.add("bg-amber-500", "text-white");
+
+            bar.classList.remove("hidden");
+            
+            // 3秒後自動隱藏提示條
+            setTimeout(() => { bar.classList.add("hidden"); }, 3000);
         }
 
         // 💡 核心點收回存機制
@@ -634,7 +607,8 @@
             const hasNoExp = !item.exp_date || item.exp_date.trim() === "" || item.exp_date === "-" || item.exp_date.includes("請先設定");
             if (hasNoExp) {
                 playBeep(180, 0.4); 
-                alert(`⚠️ 安全阻斷：品項 [ ${item.item_no || '此商品'} ] 尚未設定效期！\n\n必須先於卡片中選擇日期並點擊【儲存】，系統才會解鎖並開放點收撿貨。`);
+                // 改用動態橫幅提示，不使用 alert() 阻斷相機
+                showScanFeedback(`⚠️ 安全阻斷：[ ${item.item_no} ] 尚未設定效期！`, "warn");
                 
                 const cardEl = document.getElementById(`picker-row-${index}`);
                 if (cardEl) {
@@ -649,7 +623,6 @@
             if (item.qty_picked_pcs >= targetPcs) return;
 
             const pInfo = activePalletObject;
-            
             if (pInfo && pInfo.status !== "撿貨中") {
                 const nowISO = new Date().toISOString();
                 pInfo.status = "撿貨中";
@@ -659,20 +632,10 @@
                 try {
                     await fetch(`${SUPABASE_URL}/rest/v1/pallet_orders?id=eq.${currentPalletId}`, {
                         method: "PATCH",
-                        headers: {
-                            "apikey": SUPABASE_KEY,
-                            "Authorization": `Bearer ${SUPABASE_KEY}`,
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({
-                            start_time: nowISO,
-                            picker_id: currentPickerTableId,
-                            status: "撿貨中"
-                        })
+                        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+                        body: JSON.stringify({ start_time: nowISO, picker_id: currentPickerTableId, status: "撿貨中" })
                     });
-                } catch (e) {
-                    console.error("❌ 棧板單據狀態同步失敗:", e);
-                }
+                } catch (e) { console.error("❌ 狀態同步失敗:", e); }
             }
 
             item.qty_picked_pcs += 1;
@@ -682,19 +645,10 @@
             try {
                 await fetch(`${SUPABASE_URL}/rest/v1/pallet_items?id=eq.${item.id}`, {
                     method: "PATCH",
-                    headers: {
-                        "apikey": SUPABASE_KEY,
-                        "Authorization": `Bearer ${SUPABASE_KEY}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ 
-                        qty_picked_pcs: item.qty_picked_pcs,
-                        status: nextItemStatus 
-                    })
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({ qty_picked_pcs: item.qty_picked_pcs, status: nextItemStatus })
                 });
-            } catch (err) {
-                console.error(`❌ 明細 API 連線異常:`, err);
-            }
+            } catch (err) { console.error(`❌ 明細 API 連線異常:`, err); }
 
             const card = document.getElementById(`picker-row-${index}`);
             const countText = document.getElementById(`picked-pcs-${index}`);
@@ -711,24 +665,21 @@
 
             if (item.qty_picked_pcs === targetPcs) {
                 playBeep(1200, 0.15); 
-                if (card) {
-                    card.className = "bg-white rounded-xl shadow-xs border border-green-500 bg-green-50/20 opacity-50 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
-                }
-                if (progressBox) {
-                    progressBox.className = "text-center bg-green-100 p-1.5 rounded-lg border border-green-300 text-green-800";
-                }
+                if (card) card.className = "bg-white rounded-xl shadow-xs border border-green-500 bg-green-50/20 opacity-50 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
+                if (progressBox) progressBox.className = "text-center bg-green-100 p-1.5 rounded-lg border border-green-300 text-green-800";
                 if (countText) countText.className = "text-green-700 font-black";
                 if (btn) {
                     btn.className = "w-full mt-2 bg-green-600 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm flex items-center justify-center gap-1 cursor-not-allowed";
                     btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> 本品項已全數點收`;
                     btn.onclick = null;
                 }
-
+                showScanFeedback(`🎉 [ ${item.item_name} ] 已收滿！`, "success");
                 checkAllItemsCompleted();
             } else {
                 playBeep(900, 0.05); 
                 if (progressBox) progressBox.className = "text-center bg-blue-50 p-1.5 rounded-lg border border-blue-400";
                 if (countText) countText.className = "text-blue-600 font-black text-base animate-pulse";
+                showScanFeedback(`點收: [ ${item.item_name} ] 累計 ${item.qty_picked_pcs} 件`, "success");
             }
         }
 
@@ -741,11 +692,7 @@
 
                 fetch(`${SUPABASE_URL}/rest/v1/pallet_orders?id=eq.${currentPalletId}`, {
                     method: "PATCH",
-                    headers: {
-                        "apikey": SUPABASE_KEY,
-                        "Authorization": `Bearer ${SUPABASE_KEY}`,
-                        "Content-Type": "application/json"
-                    },
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
                     body: JSON.stringify({ end_time: nowISO, status: "已完成" })
                 })
                 .then(async (res) => {
@@ -761,16 +708,10 @@
                             
                             await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${activePalletObject.order_id}`, {
                                 method: "PATCH",
-                                headers: {
-                                    "apikey": SUPABASE_KEY,
-                                    "Authorization": `Bearer ${SUPABASE_KEY}`,
-                                    "Content-Type": "application/json"
-                                },
+                                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
                                 body: JSON.stringify({ pallets_picked: totalCompletedCount })
                             });
-                        } catch (errOrder) {
-                            console.error("同步主單波次進度失敗:", errOrder);
-                        }
+                        } catch (errOrder) { console.error("同步主單進度失敗:", errOrder); }
                     }
 
                     setTimeout(() => {
@@ -778,7 +719,7 @@
                         backToOrders();
                     }, 500);
                 })
-                .catch(err => console.error("主單結案回存失敗:", err));
+                .catch(err => console.error("結案失敗:", err));
             }
         }
 
@@ -789,19 +730,20 @@
             loadOrders(); 
         }
 
-        // 🔄 【關鍵優化】回復至重新掃描狀態（清空文字、重新抓取焦點）
+        // 🔄 回復至重新掃描待命狀態
         function focusScanInput() {
             setTimeout(() => {
                 const scanInput = document.getElementById("pda-scan-input");
-                // 只有在撿貨明細頁面亮起時，才去強制重新鎖定輸入框
                 if (scanInput && !document.getElementById("page-picking").classList.contains("hidden")) {
-                    scanInput.value = ""; // 確實清空前一次條碼文字
-                    scanInput.focus();   // 強制游標鎖定，等待下一發掃描
+                    scanInput.value = ""; 
+                    scanInput.focus();   
                 }
+                // 🔓 重要：釋放鎖定，允許相機解鎖接收下一個條碼
+                isProcessingScan = false;
             }, 50);
         }
 
-        // 📷 控制相機開啟與關閉邏輯
+        // 📷 控制相機開啟與關閉
         function toggleCameraScanner() {
             const container = document.getElementById("camera-scanner-container");
             const btnText = document.getElementById("btn-camera-text");
@@ -811,57 +753,45 @@
                 btnText.innerText = "關閉手機相機掃描";
                 
                 html5QrScanner = new Html5Qrcode("qr-reader");
-                
-                const config = { 
-                    fps: 10, 
-                    qrbox: { width: 250, height: 150 },
-                    aspectRatio: 1.777778
-                };
+                const config = { fps: 15, qrbox: { width: 260, height: 160 }, aspectRatio: 1.777778 };
 
-                html5QrScanner.start(
-                    { facingMode: "environment" }, 
-                    config, 
-                    onScanSuccess, 
-                    onScanFailure
-                ).catch(err => {
-                    alert("無法啟動相機，請確認是否已授權相機權限。\n錯誤資訊: " + err);
+                html5QrScanner.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+                .catch(err => {
+                    alert("相機開啟失敗: " + err);
                     stopCameraScanner();
                 });
-
             } else {
                 stopCameraScanner();
             }
         }
 
-        // 📷 相機成功辨識條碼
-        function onScanSuccess(decodedText, decodedResult) {
-            if (!decodedText) return;
-            processBarcodeData(decodedText.trim());
+        // 📷 相機成功辨識條碼 【連續流關鍵修正區】
+        async function onScanSuccess(decodedText, decodedResult) {
+            if (!decodedText || isProcessingScan) return;
+            
+            // 1. 先上鎖，防止在寫入資料庫的半秒內，因為手抖而重覆掃描同一個條碼
+            isProcessingScan = true; 
+            
+            // 2. 呼叫核心比對方法
+            await processBarcodeData(decodedText.trim());
         }
 
-        // 📷 掃描偵測中（略過不處理）
         function onScanFailure(error) {}
 
-        // 📷 關閉相機釋放相機控制權
         function stopCameraScanner() {
             const container = document.getElementById("camera-scanner-container");
             const btnText = document.getElementById("btn-camera-text");
             
             if (html5QrScanner) {
-                html5QrScanner.stop().then(() => {
-                    html5QrScanner = null;
-                }).catch(err => {
-                    console.error("關閉相機時發生錯誤: ", err);
-                });
+                html5QrScanner.stop().then(() => { html5QrScanner = null; }).catch(err => {});
             }
-            
             if (container) container.classList.add("hidden");
             if (btnText) btnText.innerText = "開啟手機相機掃描";
             focusScanInput();
         }
 
-        // 🔤 集中處理條碼比對與輸入流邏輯（供實體雷射與鏡頭共同調用）
-        function processBarcodeData(barcode) {
+        // 🔤 集中處理條碼比對與輸入流邏輯
+        async function processBarcodeData(barcode) {
             if (!barcode) {
                 focusScanInput();
                 return;
@@ -878,28 +808,28 @@
             }
 
             if (foundIndex !== -1) {
-                // 進行點數與安全效期防呆阻斷校驗
-                addPickCount(foundIndex);
+                // 執行點數增加與防呆
+                await addPickCount(foundIndex);
                 
-                // 掃描成功後，畫面平滑捲動到對應的卡片正中央
+                // 畫面平滑捲動到卡片
                 const rowEl = document.getElementById(`picker-row-${foundIndex}`);
                 if (rowEl) rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 
-                // 點收完後，立即回復到可重新掃描狀態
+                // 💡 解鎖相機：清空欄位、解鎖 isProcessingScan，畫面會繼續在錄影動態下等待下一個條碼！
                 focusScanInput();
             } else {
                 playBeep(300, 0.3); 
-                alert(`⚠️ 條碼 [${barcode}] 比對失敗！\n該品項可能已點收全滿，或本棧板無此品項。`);
+                // ⚠️ 比對失敗時，若用傳統 alert 會導致相機卡死。改用非阻斷式的動態提示條：
+                showScanFeedback(`❌ 條碼 [${barcode}] 比對失敗！品項已滿或無此商品`, "error");
                 
-                // 即使點選了警告視窗、焦點被搶走，關閉後仍強制回復到可掃描狀態
+                // 立即解鎖讓相機能掃下一個，不需要人員去點擊螢幕！
                 focusScanInput();
             }
         }
 
-        // 畫面點擊防呆：點到空白處自動把游標抓回來，省去人工點擊
+        // 空白處點擊防呆
         document.addEventListener("click", (e) => {
             if (e.target.closest("#qr-reader")) return;
-            
             const scanInput = document.getElementById("pda-scan-input");
             if (scanInput && !document.getElementById("page-picking").classList.contains("hidden")) {
                 if (e.target.tagName !== "INPUT" && e.target.tagName !== "BUTTON" && !e.target.closest("button")) {
@@ -908,12 +838,13 @@
             }
         });
 
-        // 鍵盤、PDA槍或行動鍵盤 APP 實體 Enter 監聽器
+        // 實體 Enter 監聽器 (PDA槍用)
         document.addEventListener("keyup", (e) => {
             const scanInput = document.getElementById("pda-scan-input");
-            if (!scanInput || document.getElementById("page-picking").classList.contains("hidden")) return;
+            if (!scanInput || document.getElementById("page-picking").classList.contains("hidden") || isProcessingScan) return;
 
             if (e.key === "Enter") {
+                isProcessingScan = true;
                 const barcode = scanInput.value.trim();
                 processBarcodeData(barcode);
             }
