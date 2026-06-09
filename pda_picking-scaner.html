@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WMS PDA 行動安全撿貨系統 (相機掃描升級版)</title>
+    <title>WMS PDA 行動安全撿貨系統 (三層完美通車版)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         @keyframes pulse-red {
             0%, 100% { border-color: #ef4444; background-color: #fef2f2; }
@@ -15,18 +14,6 @@
         .error-flash {
             animation: pulse-red 0.4s ease-in-out 3;
         }
-        /* 調整 html5-qrcode 內部控制項，使其隱藏不必要的複雜按鈕 */
-        #qr-reader button {
-            background-color: #3b82f6;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: bold;
-            margin-top: 5px;
-            cursor: pointer;
-        }
-        #qr-reader img { display: none !important; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900 font-sans antialiased select-none">
@@ -145,23 +132,13 @@
                 </div>
             </div>
 
-            <div class="bg-blue-50 border border-blue-200 rounded-xl p-2.5 space-y-2 shadow-xs">
-                <div class="flex items-center gap-2">
-                    <div class="text-blue-600 animate-pulse shrink-0 pl-1">
-                        <i class="fa-solid fa-expand text-base"></i>
-                    </div>
-                    <input type="text" id="pda-scan-input" 
-                           class="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm font-mono focus:outline-none focus:border-blue-600 shadow-inner" 
-                           placeholder="點擊輸入，或點下方按鈕開鏡頭...">
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-2.5 flex items-center gap-2 shadow-xs">
+                <div class="text-blue-600 animate-pulse shrink-0 pl-1">
+                    <i class="fa-solid fa-expand text-base"></i>
                 </div>
-                
-                <button onclick="toggleCameraScanner()" id="btn-toggle-camera" class="w-full bg-blue-600 active:bg-blue-800 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-2 shadow-xs">
-                    <i class="fa-solid fa-camera"></i> <span id="btn-camera-text">開啟手機相機掃描</span>
-                </button>
-
-                <div id="camera-scanner-container" class="hidden overflow-hidden rounded-xl border-2 border-blue-300 bg-black">
-                    <div id="qr-reader" class="w-full"></div>
-                </div>
+                <input type="text" id="pda-scan-input" 
+                       class="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm font-mono focus:outline-none focus:border-blue-600 shadow-inner" 
+                       placeholder="請直接使用 PDA 掃描物料條碼...">
             </div>
 
             <p class="text-xs font-bold text-gray-500 px-1 flex justify-between">
@@ -190,9 +167,6 @@
         let activePalletObject = null;   
         let currentPalletItems = [];
         let currentPalletId = null;
-
-        // Html5Qrcode 全域實例變數
-        let html5QrScanner = null;
 
         // 🔐 登入驗證
         async function loginVerify() {
@@ -268,7 +242,6 @@
         });
 
         function logout() {
-            stopCameraScanner(); // 登出時確保相機關閉
             currentPickerTableId = null;
             currentPickerId = "";
             currentPickerName = "";
@@ -465,6 +438,7 @@
                     const targetPcs = parseInt(item.qty_target_pcs) || 0;
                     const isDone = item.qty_picked_pcs >= targetPcs && targetPcs > 0;
                     
+                    // 🔴 如果無效期，設定亮橘色背景防呆提示
                     const hasNoExp = !item.exp_date || item.exp_date.trim() === "" || item.exp_date === "-" || item.exp_date.includes("請先設定");
                     
                     if (isDone) {
@@ -613,6 +587,7 @@
                     <span class="text-sm font-mono text-red-600 font-bold">${selectedDate}</span>
                 `;
 
+                // 移除高亮底色，恢復正常外框
                 const card = document.getElementById(`picker-row-${index}`);
                 if (card) {
                     card.className = "bg-white rounded-xl shadow-xs border border-gray-200 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
@@ -633,9 +608,10 @@
             const item = currentPalletItems[index];
             if (!item) return;
 
+            // 🛡️ 【關鍵核心防呆點 1】：手動累加時阻斷無效期品項
             const hasNoExp = !item.exp_date || item.exp_date.trim() === "" || item.exp_date === "-" || item.exp_date.includes("請先設定");
             if (hasNoExp) {
-                playBeep(180, 0.4); 
+                playBeep(180, 0.4); // 警報音
                 alert(`⚠️ 安全阻斷：品項 [ ${item.item_no || '此商品'} ] 尚未設定效期！\n\n必須先於卡片中選擇日期並點擊【儲存】，系統才會解鎖並開放點收撿貨。`);
                 
                 const cardEl = document.getElementById(`picker-row-${index}`);
@@ -644,7 +620,7 @@
                     cardEl.classList.add("error-flash");
                     setTimeout(() => cardEl.classList.remove("error-flash"), 1200);
                 }
-                return; 
+                return; // 直接截斷不累加
             }
 
             const targetPcs = parseInt(item.qty_target_pcs) || 0;
@@ -785,7 +761,6 @@
         }
 
         function backToOrders() {
-            stopCameraScanner(); // 返回波次清單時，主動關閉相機釋放資源
             document.getElementById("page-orders").classList.remove("hidden");
             document.getElementById("page-picking").classList.add("hidden");
             loadOrders(); 
@@ -801,106 +776,7 @@
             }, 200);
         }
 
-        // 📷 新增：控制相機開啟與關閉邏輯
-        function toggleCameraScanner() {
-            const container = document.getElementById("camera-scanner-container");
-            const btnText = document.getElementById("btn-camera-text");
-
-            if (container.classList.contains("hidden")) {
-                // 開啟相機
-                container.classList.remove("hidden");
-                btnText.innerText = "關閉手機相機掃描";
-                
-                // 初始化 html5QrScanner
-                html5QrScanner = new Html5Qrcode("qr-reader");
-                
-                // 配置參數：解碼格率（fps）、掃描框（qrbox）、支援的條碼格式等
-                const config = { 
-                    fps: 10, 
-                    qrbox: { width: 250, height: 150 },
-                    aspectRatio: 1.777778
-                };
-
-                // 強制優先使用後置鏡頭 (environment)
-                html5QrScanner.start(
-                    { facingMode: "environment" }, 
-                    config, 
-                    onScanSuccess, 
-                    onScanFailure
-                ).catch(err => {
-                    alert("無法啟動相機，請確認是否已授權相機權限。\n錯誤資訊: " + err);
-                    stopCameraScanner();
-                });
-
-            } else {
-                // 關閉相機
-                stopCameraScanner();
-            }
-        }
-
-        // 📷 新增：相機成功辨識條碼的回呼函數
-        function onScanSuccess(decodedText, decodedResult) {
-            if (!decodedText) return;
-            
-            // 處理掃描到的條碼，直接塞入原本的處理邏輯流程
-            processBarcodeData(decodedText.trim());
-        }
-
-        // 📷 新增：掃描失敗（沒對準時的持續偵測提示，不需做任何處理）
-        function onScanFailure(error) {
-            // 這個函數會持續觸發直到辨識成功，在此保持空白即可
-        }
-
-        // 📷 新增：完全關閉相機釋放相機控制權
-        function stopCameraScanner() {
-            const container = document.getElementById("camera-scanner-container");
-            const btnText = document.getElementById("btn-camera-text");
-            
-            if (html5QrScanner) {
-                html5QrScanner.stop().then(() => {
-                    html5QrScanner = null;
-                }).catch(err => {
-                    console.error("關閉相機時發生錯誤: ", err);
-                });
-            }
-            
-            if (container) container.classList.add("hidden");
-            if (btnText) btnText.innerText = "開啟手機相機掃描";
-            focusScanInput();
-        }
-
-        // 🔤 抽取獨立函數：集中處理條碼比對與輸入流邏輯（供鍵盤與相機共同調用）
-        function processBarcodeData(barcode) {
-            if (!barcode) return;
-
-            let foundIndex = -1;
-            for (let i = 0; i < currentPalletItems.length; i++) {
-                const item = currentPalletItems[i];
-                const targetPcs = parseInt(item.qty_target_pcs) || 0;
-                if (item.item_no === barcode && item.qty_picked_pcs < targetPcs) {
-                    foundIndex = i;
-                    break; 
-                }
-            }
-
-            if (foundIndex !== -1) {
-                // 進行點數與安全效期防呆阻斷校驗
-                addPickCount(foundIndex);
-                
-                // 掃描成功後，畫面平滑捲動到對應的卡片正中央
-                const rowEl = document.getElementById(`picker-row-${foundIndex}`);
-                if (rowEl) rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            } else {
-                playBeep(300, 0.3); 
-                alert(`⚠️ 條碼 [${barcode}] 比對失敗！\n該品項可能已點收全滿，或本棧板無此品項。`);
-            }
-            focusScanInput();
-        }
-
         document.addEventListener("click", (e) => {
-            // 避免相機內部按鈕點擊被搶焦點
-            if (e.target.closest("#qr-reader")) return;
-            
             const scanInput = document.getElementById("pda-scan-input");
             if (scanInput && !document.getElementById("page-picking").classList.contains("hidden")) {
                 if (e.target.tagName !== "INPUT" && e.target.tagName !== "BUTTON" && !e.target.closest("button")) {
@@ -909,7 +785,6 @@
             }
         });
 
-        // 鍵盤或 PDA 實體條碼槍實體 Enter 監聽
         document.addEventListener("keyup", (e) => {
             const scanInput = document.getElementById("pda-scan-input");
             if (!scanInput || document.getElementById("page-picking").classList.contains("hidden")) return;
@@ -917,7 +792,26 @@
             if (e.key === "Enter") {
                 const barcode = scanInput.value.trim();
                 scanInput.value = "";
-                processBarcodeData(barcode);
+                if (!barcode) return;
+
+                let foundIndex = -1;
+                for (let i = 0; i < currentPalletItems.length; i++) {
+                    const item = currentPalletItems[i];
+                    const targetPcs = parseInt(item.qty_target_pcs) || 0;
+                    if (item.item_no === barcode && item.qty_picked_pcs < targetPcs) {
+                        foundIndex = i;
+                        break; 
+                    }
+                }
+
+                if (foundIndex !== -1) {
+                    // 🛡️ 【關鍵核心防呆點 2】：PDA 掃描條碼時，如果是無效期商品，同樣調用 addPickCount 觸發阻斷
+                    addPickCount(foundIndex);
+                } else {
+                    playBeep(300, 0.3); 
+                    alert(`⚠️ 條碼 [${barcode}] 比對失敗！\n該品項可能已點收全滿，或本棧板無此品項。`);
+                }
+                scanInput.focus();
             }
         });
 
