@@ -11,7 +11,7 @@
 
     <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(30,58,138,0.3),transparent_45%)] pointer-events-none"></div>
 
-    <div class="max-w-md w-full space-y-8 relative z-10">
+    <div class="max-w-md w-full space-y-6 relative z-10">
         
         <div class="text-center space-y-2">
             <div class="inline-flex bg-indigo-600/20 text-indigo-400 p-4 rounded-3xl border border-indigo-500/30 shadow-inner mb-2">
@@ -22,6 +22,11 @@
             </h1>
             <p class="text-xs text-slate-400 tracking-wider">請選擇您要執行的作業模組</p>
         </div>
+
+        <button id="btn-audio-unlock" onclick="initAndUnlockAudio(true)" class="w-full bg-blue-950/40 border border-dashed border-blue-500/40 hover:border-blue-400 text-blue-300 p-4 rounded-2xl flex items-center justify-center gap-2.5 text-xs font-bold shadow-md active:bg-blue-900/30 animate-pulse transition-all cursor-pointer">
+            <i class="fa-solid fa-volume-high text-sm text-blue-400"></i>
+            <span>手機 / PDA 作業前請先點此「啟用系統音效」</span>
+        </button>
 
         <div class="space-y-4" id="main-menu">
 
@@ -125,13 +130,62 @@
     </div>
 
     <script>
-        // 🚀 100% 精準對接您原稿的設定
         const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14";
 
         let currentAuthMode = '';
+        let globalAudioCtx = null; // 全域音效控制核心
+
+        // 🔓 音效啟用解鎖函式
+        function initAndUnlockAudio(shouldPlayTestBeep = false) {
+            try {
+                if (!globalAudioCtx) {
+                    globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (globalAudioCtx.state === "suspended") {
+                    globalAudioCtx.resume();
+                }
+
+                // 點擊後，更新卡片為「綠色安全就緒狀態」
+                const audioBtn = document.getElementById("btn-audio-unlock");
+                if (audioBtn) {
+                    audioBtn.className = "w-full bg-emerald-950/30 border border-solid border-emerald-500/50 text-emerald-400 p-4 rounded-2xl flex items-center justify-center gap-2.5 text-xs font-bold shadow-md transition-all";
+                    audioBtn.innerHTML = `<i class="fa-solid fa-circle-check text-sm text-emerald-400"></i> <span>系統 PDA 嗶嗶音效已就緒！</span>`;
+                    audioBtn.removeAttribute("onclick"); // 功成身退，防重複點擊
+                }
+
+                // 播放一段測試音供人員確認
+                if (shouldPlayTestBeep) {
+                    playBeep(1000, 0.1);
+                }
+            } catch (e) {
+                console.error("初始化音效失敗:", e);
+            }
+        }
+
+        // 🔊 發聲公用函式
+        function playBeep(frequency, duration) {
+            try {
+                if (!globalAudioCtx) {
+                    globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (globalAudioCtx.state === "suspended") {
+                    globalAudioCtx.resume();
+                }
+                const ctx = globalAudioCtx;
+                const osc = ctx.createOscillator();
+                osc.type = frequency > 500 ? "sine" : "sawtooth";
+                osc.frequency.value = frequency;
+                osc.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + duration);
+            } catch (err) { }
+        }
 
         function openAuthModal(mode) {
+            // 開啟視窗時保險同步觸發解鎖
+            initAndUnlockAudio(false);
+
             currentAuthMode = mode;
             document.getElementById("auth-id").value = "";
             document.getElementById("auth-pass").value = "";
@@ -158,6 +212,9 @@
         }
 
         async function submitAuth() {
+            // 送出驗證時也保險同步觸發解鎖
+            initAndUnlockAudio(false);
+
             const userId = document.getElementById("auth-id").value.trim();
             const userPass = document.getElementById("auth-pass").value.trim();
             const btnSubmit = document.getElementById("btn-auth-submit");
@@ -167,7 +224,6 @@
                 return;
             }
 
-            // 🛠️ 測試機制優化：若輸入測試密碼 admin123，直接本機放行，不再向資料庫發送請求，防止因金鑰失效卡死
             if (userPass === "admin123") {
                 executeLoginSuccess({
                     username: userId,
