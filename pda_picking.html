@@ -6,6 +6,15 @@
     <title>WMS PDA 行動安全撿貨系統 (三層完美通車版)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes pulse-red {
+            0%, 100% { border-color: #ef4444; background-color: #fef2f2; }
+            50% { border-color: #b91c1c; background-color: #fee2e2; }
+        }
+        .error-flash {
+            animation: pulse-red 0.4s ease-in-out 3;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 text-gray-900 font-sans antialiased select-none">
 
@@ -239,7 +248,7 @@
             document.getElementById("login-user").focus();
         }
 
-        // 🔄 【第一層】載入訂單波次清單 (修正 finally 區塊的物件阻擋防禦)
+        // 🔄 【第一層】載入訂單波次清單
         async function loadOrders() {
             const container = document.getElementById("order-list");
             const loader = document.getElementById("loader-orders");
@@ -263,7 +272,6 @@
                 
                 const allOrders = await response.json();
 
-                // ⚡ 前端過濾：僅保留 pallets_picked < total_pallets 的進行中訂單
                 const activeOrders = allOrders.filter(order => {
                     const picked = parseInt(order.pallets_picked) || 0;
                     const total = parseInt(order.total_pallets) || 0;
@@ -305,13 +313,12 @@
                 errCard.classList.remove("hidden");
                 document.getElementById("api-error-text").innerText = err.message;
             } finally {
-                // 🛠️ 修正精髓：安全關閉載入圈圈與旋轉，徹底防止 null.classList 報錯
                 if (loader) loader.classList.add("hidden");
                 if (icon) icon.classList.remove("animate-spin");
             }
         }
 
-        // 📂 【第二層】動態抓取該單據下的所有棧板 (不限狀態)
+        // 📂 【第二層】動態抓取該單據下的所有棧板
         async function toggleOrderGroup(orderId) {
             const subBox = document.getElementById(`sub-pallets-${orderId}`);
             const arrow = document.getElementById(`arrow-${orderId}`);
@@ -427,25 +434,30 @@
                     const targetPcs = parseInt(item.qty_target_pcs) || 0;
                     const isDone = item.qty_picked_pcs >= targetPcs && targetPcs > 0;
                     
+                    // 🔴 如果無效期，設定亮橘色背景防呆提示
+                    const hasNoExp = !item.exp_date || item.exp_date.trim() === "" || item.exp_date === "-" || item.exp_date.includes("請先設定");
+                    
                     if (isDone) {
                         itemCard.className = "bg-white rounded-xl shadow-xs border border-green-500 bg-green-50/20 opacity-50 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
+                    } else if (hasNoExp) {
+                        itemCard.className = "bg-amber-50/60 rounded-xl shadow-xs border border-amber-300 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
                     } else {
                         itemCard.className = "bg-white rounded-xl shadow-xs border border-gray-200 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
                     }
                     
-                    const hasExp = !!item.exp_date;
+                    const hasExp = !hasNoExp;
                     let expHtml = "";
 
                     if (hasExp) {
                         expHtml = `
-                            <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 規劃效期:</span>
+                            <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 產品效期:</span>
                             <span class="text-sm font-mono text-red-600 font-bold">${item.exp_date}</span>
                         `;
                     } else {
                         expHtml = `
                             <div class="flex items-center gap-2 w-full">
-                                <span class="text-xs text-amber-600 font-bold shrink-0"><i class="fa-solid fa-calendar-plus"></i> 設定效期:</span>
-                                <input type="date" id="input-exp-${item.id}" class="text-xs border border-amber-300 rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 font-mono bg-amber-50/50 grow">
+                                <span class="text-xs text-red-600 font-bold shrink-0 animate-pulse"><i class="fa-solid fa-triangle-exclamation"></i> 請設定效期:</span>
+                                <input type="date" id="input-exp-${item.id}" class="text-xs border border-amber-300 rounded px-1.5 py-1 focus:outline-none focus:border-blue-500 font-mono bg-white grow">
                                 <button onclick="updateExpiry(${item.id}, ${index})" id="btn-save-exp-${item.id}" class="bg-amber-600 active:bg-amber-700 text-white text-xs font-bold px-2.5 py-1.5 rounded shadow-xs shrink-0 flex items-center gap-1">
                                     <i class="fa-solid fa-floppy-disk"></i> 儲存
                                 </button>
@@ -495,11 +507,11 @@
                         <div class="grid grid-cols-3 gap-2 pt-1">
                             <div class="text-center bg-blue-50/50 p-1.5 rounded-lg border border-blue-100/60">
                                 <p class="text-[10px] text-blue-500 font-medium">預計撿貨數</p>
-                                <p class="text-sm font-black font-mono text-blue-700 mt-0.5">${item.qty_target || '0'}</p>
+                                <p class="text-sm font-black font-mono text-blue-700 mt-0.5">${item.qty_target_text || '0'}</p>
                             </div>
                             <div class="text-center bg-gray-50 p-1.5 rounded-lg">
                                 <p class="text-[10px] text-gray-400 font-medium">訂單原始數</p>
-                                <p class="text-sm font-bold font-mono text-gray-600 mt-0.5">${item.qty_order || '0'}</p>
+                                <p class="text-sm font-bold font-mono text-gray-600 mt-0.5">${item.qty_order_text || '0'}</p>
                             </div>
                             <div id="progress-box-${index}" class="${progressBoxClass}">
                                 <p class="text-[10px] text-gray-500 font-medium">點收進度</p>
@@ -567,9 +579,15 @@
                 }
 
                 expBlock.innerHTML = `
-                    <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 規劃效期:</span>
+                    <span class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-clock-rotate-left"></i> 產品效期:</span>
                     <span class="text-sm font-mono text-red-600 font-bold">${selectedDate}</span>
                 `;
+
+                // 移除高亮底色，恢復正常外框
+                const card = document.getElementById(`picker-row-${index}`);
+                if (card) {
+                    card.className = "bg-white rounded-xl shadow-xs border border-gray-200 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
+                }
 
             } catch (error) {
                 alert(`❌ 儲存失敗！\n原因：${error.message}`);
@@ -585,6 +603,21 @@
         async function addPickCount(index) {
             const item = currentPalletItems[index];
             if (!item) return;
+
+            // 🛡️ 【關鍵核心防呆點 1】：手動累加時阻斷無效期品項
+            const hasNoExp = !item.exp_date || item.exp_date.trim() === "" || item.exp_date === "-" || item.exp_date.includes("請先設定");
+            if (hasNoExp) {
+                playBeep(180, 0.4); // 警報音
+                alert(`⚠️ 安全阻斷：品項 [ ${item.item_no || '此商品'} ] 尚未設定效期！\n\n必須先於卡片中選擇日期並點擊【儲存】，系統才會解鎖並開放點收撿貨。`);
+                
+                const cardEl = document.getElementById(`picker-row-${index}`);
+                if (cardEl) {
+                    cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    cardEl.classList.add("error-flash");
+                    setTimeout(() => cardEl.classList.remove("error-flash"), 1200);
+                }
+                return; // 直接截斷不累加
+            }
 
             const targetPcs = parseInt(item.qty_target_pcs) || 0;
             if (item.qty_picked_pcs >= targetPcs) return;
@@ -653,8 +686,7 @@
             if (item.qty_picked_pcs === targetPcs) {
                 playBeep(1200, 0.15); 
                 if (card) {
-                    card.classList.remove("border-gray-200");
-                    card.classList.add("border-green-500", "bg-green-50/20", "opacity-50");
+                    card.className = "bg-white rounded-xl shadow-xs border border-green-500 bg-green-50/20 opacity-50 p-4 space-y-3 relative overflow-hidden transition-all duration-300";
                 }
                 if (progressBox) {
                     progressBox.className = "text-center bg-green-100 p-1.5 rounded-lg border border-green-300 text-green-800";
@@ -769,9 +801,8 @@
                 }
 
                 if (foundIndex !== -1) {
+                    // 🛡️ 【關鍵核心防呆點 2】：PDA 掃描條碼時，如果是無效期商品，同樣調用 addPickCount 觸發阻斷
                     addPickCount(foundIndex);
-                    const rowEl = document.getElementById(`picker-row-${foundIndex}`);
-                    if (rowEl) rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 } else {
                     playBeep(300, 0.3); 
                     alert(`⚠️ 條碼 [${barcode}] 比對失敗！\n該品項可能已點收全滿，或本棧板無此品項。`);
