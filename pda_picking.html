@@ -730,17 +730,17 @@
             loadOrders(); 
         }
 
-        // 🔄 回復至重新掃描待命狀態
-        function focusScanInput() {
+// 🔄 回復至重新掃描待命狀態（支援動態冷卻時間）
+        function focusScanInput(delayMs = 50) {
             setTimeout(() => {
                 const scanInput = document.getElementById("pda-scan-input");
                 if (scanInput && !document.getElementById("page-picking").classList.contains("hidden")) {
                     scanInput.value = ""; 
                     scanInput.focus();   
                 }
-                // 🔓 重要：釋放鎖定，允許相機解鎖接收下一個條碼
+                // 🔓 只有在指定的延遲時間（例如 3 秒）結束後，才徹底釋放鎖定
                 isProcessingScan = false;
-            }, 50);
+            }, delayMs);
         }
 
         // 📷 控制相機開啟與關閉
@@ -765,35 +765,24 @@
             }
         }
 
-        // 📷 相機成功辨識條碼 【連續流關鍵修正區】
+// 📷 相機成功辨識條碼 【最前端攔截機制】
         async function onScanSuccess(decodedText, decodedResult) {
-            if (!decodedText || isProcessingScan) return;
+            // 🛑 核心防禦：如果目前正在 3 秒冷卻鎖定中，最前端直接無視、不排隊、直接退回！
+            if (isProcessingScan || !decodedText) return;
             
-            // 1. 先上鎖，防止在寫入資料庫的半秒內，因為手抖而重覆掃描同一個條碼
+            // 🔒 觸發成功立刻上鎖
             isProcessingScan = true; 
             
-            // 2. 呼叫核心比對方法
+            // 呼叫核心比對方法
             await processBarcodeData(decodedText.trim());
         }
 
         function onScanFailure(error) {}
 
-        function stopCameraScanner() {
-            const container = document.getElementById("camera-scanner-container");
-            const btnText = document.getElementById("btn-camera-text");
-            
-            if (html5QrScanner) {
-                html5QrScanner.stop().then(() => { html5QrScanner = null; }).catch(err => {});
-            }
-            if (container) container.classList.add("hidden");
-            if (btnText) btnText.innerText = "開啟手機相機掃描";
-            focusScanInput();
-        }
-
-        // 🔤 集中處理條碼比對與輸入流邏輯
+        // 🔤 集中處理條碼比對與輸入流邏輯（加入 3 秒與 1.5 秒中斷機制）
         async function processBarcodeData(barcode) {
             if (!barcode) {
-                focusScanInput();
+                focusScanInput(0); // 空值直接解鎖
                 return;
             }
 
@@ -801,6 +790,8 @@
             for (let i = 0; i < currentPalletItems.length; i++) {
                 const item = currentPalletItems[i];
                 const targetPcs = parseInt(item.qty_target_pcs) || 0;
+                
+                // 🎯 修正：比對 database 中的 barcode 欄位，而非 item_no
                 if (String(item.barcode).trim() === String(barcode).trim() && item.qty_picked_pcs < targetPcs) {
                     foundIndex = i;
                     break; 
@@ -815,17 +806,31 @@
                 const rowEl = document.getElementById(`picker-row-${foundIndex}`);
                 if (rowEl) rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 
-                // 💡 解鎖相機：清空欄位、解鎖 isProcessingScan，畫面會繼續在錄影動態下等待下一個條碼！
-                focusScanInput(3000);
+                // 💡 成功點收：頂部跳出黃色提示，並強制冷卻/中斷 3000 毫秒 (3秒)
+                showScanFeedback(`⏱️ 點收成功！系統處理中，請稍候 3 秒...`, "warn");
+                focusScanInput(3000); 
             } else {
                 playBeep(300, 0.3); 
-                // ⚠️ 比對失敗時，若用傳統 alert 會導致相機卡死。改用非阻斷式的動態提示條：
                 showScanFeedback(`❌ 條碼 [${barcode}] 比對失敗！品項已滿或無此商品`, "error");
                 
-                // 立即解鎖讓相機能掃下一個，不需要人員去點擊螢幕！
-                focusScanInput(1500);
+                // 💡 比對失敗：為了防工作人員手抖重覆刷到，同樣給予 1500 毫秒 (1.5秒) 的防抖冷卻時間
+                focusScanInput(1500); 
             }
         }
+
+        function stopCameraScanner() {
+            const container = document.getElementById("camera-scanner-container");
+            const btnText = document.getElementById("btn-camera-text");
+            
+            if (html5QrScanner) {
+                html5QrScanner.stop().then(() => { html5QrScanner = null; }).catch(err => {});
+            }
+            if (container) container.classList.add("hidden");
+            if (btnText) btnText.innerText = "開啟手機相機掃描";
+            focusScanInput();
+        }
+
+ 
 
         // 空白處點擊防呆
         document.addEventListener("click", (e) => {
