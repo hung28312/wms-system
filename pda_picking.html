@@ -801,7 +801,7 @@
             for (let i = 0; i < currentPalletItems.length; i++) {
                 const item = currentPalletItems[i];
                 const targetPcs = parseInt(item.qty_target_pcs) || 0;
-                if (item.item_no === barcode && item.qty_picked_pcs < targetPcs) {
+                if (String(item.barcode).trim() === String(barcode).trim() && item.qty_picked_pcs < targetPcs) {
                     foundIndex = i;
                     break; 
                 }
