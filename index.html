@@ -167,15 +167,16 @@
                 return;
             }
 
-            // 🛠️ 測試機制優化：若輸入測試密碼 admin123，直接本機放行，不再向資料庫發送請求，防止因金鑰失效卡死
+// 🛠️ 測試機制優化：若輸入測試密碼 admin123，直接本機放行
             if (userPass === "admin123") {
+                // 🎯【修改點】：將工號 "1" 也加入本機測試放行的管理員清單
+                const isTestAdmin = (userId === "120404" || userId === "1" || userId.toLowerCase().includes("admin"));
                 executeLoginSuccess({
                     username: userId,
-                    role: (userId === "120404" || userId.toLowerCase().includes("admin")) ? "admin" : "user"
+                    role: isTestAdmin ? "admin" : "user"
                 });
                 return;
             }
-
             btnSubmit.disabled = true;
             btnSubmit.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 驗證中...`;
 
@@ -193,7 +194,16 @@
 
                 if (users.length > 0 && String(users[0].password) === String(userPass)) {
                     const matchedUser = users[0];
-                    const userRole = (matchedUser.username === "120404" || String(matchedUser.username).toLowerCase().includes("admin")) ? "admin" : "user";
+                    
+                    // 🎯【核心修正】：移除原本寫死的 120404 與 admin 判定
+                    // 直接讀取資料庫的 role 欄位。只要 role 是 "admin" 或 "supervisor" 就算管理員
+                    let userRole = "user";
+                    if (matchedUser.role === "admin" || matchedUser.role === "supervisor") {
+                        userRole = "admin";
+                    }
+                    
+                    // 💾 (選填優化) 同步將當前登入者存入快取，供後續頁面辨認
+                    localStorage.setItem("currentUser", JSON.stringify(matchedUser));
                     
                     executeLoginSuccess({ username: matchedUser.username, role: userRole });
                 } else {
