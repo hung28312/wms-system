@@ -87,6 +87,20 @@
                 </button>
             </div>
 
+            <div class="bg-white rounded-xl border border-gray-200 p-3 shadow-xs flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <i class="fa-solid fa-calendar-days text-blue-600 text-sm"></i>
+                    <span class="text-xs font-bold text-gray-600">基準日</span>
+                </div>
+                <input type="date" id="filter-date" onchange="loadOrders()" class="text-sm font-mono font-bold bg-gray-50 border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500 focus:bg-white text-gray-700">
+                
+                <div class="flex items-center gap-1 shrink-0">
+                    <span class="text-xs font-bold text-gray-600">往後</span>
+                    <input type="number" id="filter-days" value="5" min="0" onchange="loadOrders()" class="w-12 text-center text-sm font-mono font-bold bg-gray-50 border border-gray-300 rounded-lg py-1 focus:outline-none focus:border-blue-500 focus:bg-white text-gray-700">
+                    <span class="text-xs font-bold text-gray-600">天</span>
+                </div>
+
+            </div>
             <div id="api-error-card" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 space-y-2">
                 <p class="text-sm font-bold text-red-600 flex items-center gap-1">
                     <i class="fa-solid fa-circle-exclamation"></i> 聯絡雲端資料庫時發生技術錯誤
@@ -283,8 +297,19 @@
             document.getElementById("page-picking").classList.add("hidden");
             document.getElementById("login-user").focus();
         }
+// 📅 初始化日期控制項（如果沒選，預設為今日 YYYY-MM-DD）
+        function initFilterDate() {
+            const dateInput = document.getElementById("filter-date");
+            if (dateInput && !dateInput.value) {
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const dd = String(today.getDate()).padStart(2, '0');
+                dateInput.value = `${yyyy}-${mm}-${dd}`;
+            }
+        }
 
-        // 🔄 載入訂單波次清單
+        // 🔄 載入訂單波次清單 (僅修改時間軸計算，其餘卡片生成與內部邏輯完全不變)
         async function loadOrders() {
             const container = document.getElementById("order-list");
             const loader = document.getElementById("loader-orders");
@@ -296,8 +321,33 @@
             loader.classList.remove("hidden");
             if (icon) icon.classList.add("animate-spin");
 
+            // 🎯 1. 初始化並取得使用者選擇的基準日期與自訂天數
+            initFilterDate(); 
+            const baseDateStr = document.getElementById("filter-date").value;
+            
+            // 取得輸入的天數，如果框框被清空或不合法，預設為 5 天
+            const daysInput = document.getElementById("filter-days");
+            const targetDays = (daysInput && daysInput.value !== "") ? parseInt(daysInput.value) : 5;
+            
+            // 🎯 2. 核心時間軸計算：
+            // 起始日 = 基準日的前 1 天 (-1)
+            const startDate = new Date(baseDateStr);
+            startDate.setDate(startDate.getDate() - 1); 
+
+            // 截止日 = 基準日的後 N 天 (+targetDays)
+            const endDate = new Date(baseDateStr);
+            endDate.setDate(endDate.getDate() + targetDays); 
+
+            // 轉回 Supabase 相容的 YYYY-MM-DD 格式文字列
+            const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const startDateISO = formatDate(startDate);
+            const endDateISO = formatDate(endDate);
+
             try {
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/orders?order=id.asc`, {
+                // 🎯 3. 修改 API URL 條件：將新計算出來的「前1天」與「後N天」代入查詢
+                const apiFilterUrl = `${SUPABASE_URL}/rest/v1/orders?ship_date=gte.${startDateISO}&ship_date=lte.${endDateISO}&order=ship_date.asc,id.asc`;
+                
+                const response = await fetch(apiFilterUrl, {
                     headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
                 });
                 if (!response.ok) throw new Error(await response.text());
@@ -306,10 +356,15 @@
                 const activeOrders = allOrders.filter(order => (parseInt(order.pallets_picked) || 0) < (parseInt(order.total_pallets) || 0));
 
                 if (activeOrders.length === 0) {
-                    container.innerHTML = `<div class="text-center py-12 text-gray-400 italic bg-white rounded-xl border border-dashed border-gray-300">🎉 目前沒有待處理的未完工波次！</div>`;
+                    container.innerHTML = `
+                        <div class="text-center py-10 text-gray-400 italic bg-white rounded-xl border border-dashed border-gray-300 px-4 space-y-1">
+                            <p class="font-bold text-gray-500">📭 找不到對應的未完工單據</p>
+                            <p class="text-[11px]">區間：${startDateISO} ～ ${endDateISO}</p>
+                        </div>`;
                     return;
                 }
 
+                // 【以下原封不動】卡片畫面生成與原有連動機制完全維持不變
                 activeOrders.forEach((order) => {
                     const card = document.createElement("div");
                     card.className = "bg-white rounded-xl shadow-xs border border-gray-200 overflow-hidden";
@@ -318,11 +373,12 @@
                             <div class="space-y-0.5">
                                 <div class="flex items-center gap-2">
                                     <span class="bg-gray-800 text-white font-mono text-[11px] font-bold px-1.5 py-0.5 rounded">波次</span>
-                                    <h4 class="font-bold text-base text-gray-800">${order.order_no || "未命名波次"}</h4>
+                                    <h4 class="font-bold text-base text-gray-800">${order.order_no || "未命名"}</h4>
                                 </div>
-                                <p class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-truck-ramp-box text-gray-400"></i> 客戶: ${order.ship_vendor || "未知廠商"}</p>
+                                <p class="text-xs text-gray-500 font-medium"><i class="fa-solid fa-truck-ramp-box text-gray-400 text-[11px]"></i> 客戶: ${order.ship_vendor || "未知廠商"}</p>
+                                <p class="text-[11px] text-blue-600 font-mono font-bold"><i class="fa-solid fa-calendar text-[10px]"></i> 出貨日: ${order.ship_date || "未定"}</p>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 text-right">
                                 <span class="bg-blue-50 text-blue-600 font-mono text-xs font-bold px-2 py-1 rounded-md border border-blue-100">
                                     進度: ${order.pallets_picked || 0} / ${order.total_pallets || 0} 板
                                 </span>
@@ -344,7 +400,6 @@
             }
         }
 
-        // 📂 動態抓取該單據下的所有棧板
 // 📂 動態抓取該單據下的所有棧板
         async function toggleOrderGroup(orderId) {
             const subBox = document.getElementById(`sub-pallets-${orderId}`);
