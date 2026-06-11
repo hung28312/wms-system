@@ -400,7 +400,7 @@
             }
         }
 
-// 📂 動態抓取該單據下的所有棧板
+// 📂 動態抓取該單據下的所有棧板（支援本人續接，非本人鎖定機制）
         async function toggleOrderGroup(orderId) {
             const subBox = document.getElementById(`sub-pallets-${orderId}`);
             const arrow = document.getElementById(`arrow-${orderId}`);
@@ -427,26 +427,33 @@
                     childPallets.forEach(p => {
                         const row = document.createElement("div");
                         
-                        // 🎯【核心修改點 1】：判定狀態是否需要鎖定
                         const currentStatus = p.status || '待撿貨';
-                        const isLocked = (currentStatus === "撿貨中" || currentStatus === "已完成");
+                        
+                        // 🎯【核心判斷】：如果狀態是撿貨中，且裡面的 picker_id 剛好等於現在登入的人，就是「本人續接」
+                        const isMyOwnJob = (currentStatus === "撿貨中" && p.picker_id !== null && parseInt(p.picker_id) === parseInt(currentPickerTableId));
+                        
+                        // 🎯【鎖定條件變更】：必須是 (撿貨中且非本人) 或者 (已完成)，才需要被安全防護鎖定
+                        const isLocked = ((currentStatus === "撿貨中" && !isMyOwnJob) || currentStatus === "已完成");
 
                         let badgeColor = "bg-gray-200 text-gray-600 border-gray-300";
                         if (currentStatus === "待撿貨") badgeColor = "bg-amber-100 text-amber-900 border-amber-200";
-                        if (currentStatus === "撿貨中") badgeColor = "bg-blue-100 text-blue-900 border-blue-200 animate-pulse";
+                        // 💡 如果是本人的任務，標籤特別標示「續撿」，方便辨識
+                        if (currentStatus === "撿貨中") {
+                            badgeColor = isMyOwnJob 
+                                ? "bg-blue-600 text-white border-blue-700 animate-pulse font-black" 
+                                : "bg-blue-100 text-blue-900 border-blue-200 animate-pulse";
+                        }
                         if (currentStatus === "已完成") badgeColor = "bg-green-100 text-green-900 border-green-200";
                         
-                        // 🎯【核心修改點 2】：根據是否鎖定，給予不同的外觀樣式與點擊行為
                         if (isLocked) {
-                            // 🔒 鎖定狀態：變灰 (opacity-50)、游標變成不可點選、點擊時跳出安全警示
+                            // 🔒 鎖定狀態：非本人撿貨中，或已完工單據
                             row.className = "p-3.5 flex justify-between items-center bg-gray-100 opacity-50 cursor-not-allowed transition-colors";
                             row.onclick = () => {
                                 playBeep(300, 0.3);
-                                // 利用系統現有的橫幅提示機制通知人員（因為尚未進入撿貨頁，若畫面無此元件會自動防呆）
-                                alert(`🚫 安全安全防護：該棧板目前狀態為 [${currentStatus}]，已被鎖定，其他人員無法進入作業！`);
+                                alert(`🚫 安全安全防護：該棧板目前由其他人員 [狀態: ${currentStatus}] 作業中，已被系統鎖定！`);
                             };
                         } else {
-                            // 🔓 待撿貨狀態：維持您原本的正常點選邏輯與外觀
+                            // 🔓 允許點選狀態：待撿貨，或者【本人正在處理的續接任務】
                             row.className = "p-3.5 flex justify-between items-center active:bg-blue-50/50 cursor-pointer transition-colors";
                             row.onclick = () => {
                                 activePalletObject = p; 
@@ -454,8 +461,18 @@
                             };
                         }
                         
-                        // 渲染內容保持不變，但如果是鎖定狀態，在名稱後方加上鎖頭圖示
-                        const lockIcon = isLocked ? `<i class="fa-solid fa-lock text-red-500 ml-1 text-xs"></i>` : '';
+                        // 在名稱後方加上鎖頭或本人專屬圖示
+                        let lockIcon = '';
+                        if (isLocked) {
+                            lockIcon = `<i class="fa-solid fa-lock text-red-500 ml-1 text-xs"></i>`;
+                        } else if (isMyOwnJob) {
+                            lockIcon = `<i class="fa-solid fa-user-pen text-blue-600 ml-1 text-xs" title="您的續撿任務"></i>`;
+                        }
+                        
+                        // 顯示文字調整：若是本人則顯示「續撿中」，否則維持原樣
+                        let statusText = currentStatus;
+                        if (isMyOwnJob) statusText = "續撿中";
+                        if (isLocked) statusText = currentStatus + ' (鎖定)';
                         
                         row.innerHTML = `
                             <div class="flex items-center gap-3">
@@ -468,7 +485,7 @@
                                 </div>
                             </div>
                             <span class="text-xs font-bold px-2.5 py-1 rounded-md border shadow-2xs ${badgeColor}">
-                                ${isLocked ? currentStatus + ' (鎖定)' : currentStatus} <i class="fa-solid fa-chevron-right text-[9px] ml-0.5"></i>
+                                ${statusText} <i class="fa-solid fa-chevron-right text-[9px] ml-0.5"></i>
                             </span>
                         `;
                         subBox.appendChild(row);
@@ -484,12 +501,15 @@
             currentPalletId = palletId;
             const pInfo = activePalletObject;
             if(!pInfo) return;
-            // 🎯【安全防護修改點】：在進入前進行最後一次狀態複查
+     
+            // 🎯【更新防線】：只有當狀態是已完成，或是撿貨中「且非本人」時才攔截
             const checkStatus = pInfo.status || '待撿貨';
-            if (checkStatus === "撿貨中" || checkStatus === "已完成") {
+            const isNotMyJob = (checkStatus === "撿貨中" && pInfo.picker_id !== null && parseInt(pInfo.picker_id) !== parseInt(currentPickerTableId));
+            
+            if (isNotMyJob || checkStatus === "已完成") {
                 playBeep(300, 0.3);
-                alert(`🚫 點選失敗：該棧板剛剛已被更新為 [${checkStatus}]，無法重覆進入作業。系統將自動重新整理清單。`);
-                loadOrders(); // 自動重新整理清單
+                alert(`🚫 點選失敗：該棧板剛剛已被其他人員更新或完工。系統將自動重新整理清單。`);
+                loadOrders(); 
                 return;
             }
 
