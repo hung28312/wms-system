@@ -786,13 +786,21 @@
                 return;
             }
 
+            // 🎯 【修改點】：將 PDA 掃描到的條碼轉為字串並去除前後空白
+            let scanBarcode = String(barcode).trim();
             let foundIndex = -1;
+            
             for (let i = 0; i < currentPalletItems.length; i++) {
                 const item = currentPalletItems[i];
                 const targetPcs = parseInt(item.qty_target_pcs) || 0;
                 
-                // 🎯 修正：比對 database 中的 barcode 欄位，而非 item_no
-                if (String(item.barcode).trim() === String(barcode).trim() && item.qty_picked_pcs < targetPcs) {
+                // 🎯 【關鍵修改】：改為抓取資料庫新開的 14 碼外箱條碼欄位 `b_code`
+                // 💡 加上防呆機制：若 b_code 不存在則退回比對原本的 13 碼商品碼 (item.barcode)
+                let dbBoxBarcode = item.b_code ? String(item.b_code).trim() : "";
+                let dbItemBarcode = item.barcode ? String(item.barcode).trim() : "";
+
+                // 比對 PDA 刷入的條碼是否符合新欄位 b_code (或舊欄位 barcode) 且該品項尚未收滿
+                if ((scanBarcode === dbBoxBarcode || scanBarcode === dbItemBarcode) && item.qty_picked_pcs < targetPcs) {
                     foundIndex = i;
                     break; 
                 }
@@ -811,7 +819,7 @@
                 focusScanInput(3000); 
             } else {
                 playBeep(300, 0.3); 
-                showScanFeedback(`❌ 條碼 [${barcode}] 比對失敗！品項已滿或無此商品`, "error");
+                showScanFeedback(`❌ 條碼 [${scanBarcode}] 比對失敗！品項已滿或無此商品`, "error");
                 
                 // 💡 比對失敗：為了防工作人員手抖重覆刷到，同樣給予 1500 毫秒 (1.5秒) 的防抖冷卻時間
                 focusScanInput(1500); 
