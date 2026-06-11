@@ -345,6 +345,7 @@
         }
 
         // 📂 動態抓取該單據下的所有棧板
+// 📂 動態抓取該單據下的所有棧板
         async function toggleOrderGroup(orderId) {
             const subBox = document.getElementById(`sub-pallets-${orderId}`);
             const arrow = document.getElementById(`arrow-${orderId}`);
@@ -370,16 +371,36 @@
 
                     childPallets.forEach(p => {
                         const row = document.createElement("div");
-                        row.onclick = () => {
-                            activePalletObject = p; 
-                            startPicking(p.id);
-                        };
-                        row.className = "p-3.5 flex justify-between items-center active:bg-blue-50/50 cursor-pointer transition-colors";
                         
+                        // 🎯【核心修改點 1】：判定狀態是否需要鎖定
+                        const currentStatus = p.status || '待撿貨';
+                        const isLocked = (currentStatus === "撿貨中" || currentStatus === "已完成");
+
                         let badgeColor = "bg-gray-200 text-gray-600 border-gray-300";
-                        if (p.status === "待撿貨" || !p.status) badgeColor = "bg-amber-100 text-amber-900 border-amber-200";
-                        if (p.status === "撿貨中") badgeColor = "bg-blue-100 text-blue-900 border-blue-200 animate-pulse";
-                        if (p.status === "已完成") badgeColor = "bg-green-100 text-green-900 border-green-200";
+                        if (currentStatus === "待撿貨") badgeColor = "bg-amber-100 text-amber-900 border-amber-200";
+                        if (currentStatus === "撿貨中") badgeColor = "bg-blue-100 text-blue-900 border-blue-200 animate-pulse";
+                        if (currentStatus === "已完成") badgeColor = "bg-green-100 text-green-900 border-green-200";
+                        
+                        // 🎯【核心修改點 2】：根據是否鎖定，給予不同的外觀樣式與點擊行為
+                        if (isLocked) {
+                            // 🔒 鎖定狀態：變灰 (opacity-50)、游標變成不可點選、點擊時跳出安全警示
+                            row.className = "p-3.5 flex justify-between items-center bg-gray-100 opacity-50 cursor-not-allowed transition-colors";
+                            row.onclick = () => {
+                                playBeep(300, 0.3);
+                                // 利用系統現有的橫幅提示機制通知人員（因為尚未進入撿貨頁，若畫面無此元件會自動防呆）
+                                alert(`🚫 安全安全防護：該棧板目前狀態為 [${currentStatus}]，已被鎖定，其他人員無法進入作業！`);
+                            };
+                        } else {
+                            // 🔓 待撿貨狀態：維持您原本的正常點選邏輯與外觀
+                            row.className = "p-3.5 flex justify-between items-center active:bg-blue-50/50 cursor-pointer transition-colors";
+                            row.onclick = () => {
+                                activePalletObject = p; 
+                                startPicking(p.id);
+                            };
+                        }
+                        
+                        // 渲染內容保持不變，但如果是鎖定狀態，在名稱後方加上鎖頭圖示
+                        const lockIcon = isLocked ? `<i class="fa-solid fa-lock text-red-500 ml-1 text-xs"></i>` : '';
                         
                         row.innerHTML = `
                             <div class="flex items-center gap-3">
@@ -387,12 +408,12 @@
                                     <i class="fa-solid fa-pallet text-amber-600"></i>
                                 </div>
                                 <div>
-                                    <p class="font-mono text-sm font-bold text-gray-700">${p.pallet_no || '未編號'}</p>
+                                    <p class="font-mono text-sm font-bold text-gray-700">${p.pallet_no || '未編號'}${lockIcon}</p>
                                     <p class="text-[11px] text-gray-400">規格: ${p.total_pieces || 0}件 / ${p.total_weight || 0}kg</p>
                                 </div>
                             </div>
                             <span class="text-xs font-bold px-2.5 py-1 rounded-md border shadow-2xs ${badgeColor}">
-                                ${p.status || '待撿貨'} <i class="fa-solid fa-chevron-right text-[9px] ml-0.5"></i>
+                                ${isLocked ? currentStatus + ' (鎖定)' : currentStatus} <i class="fa-solid fa-chevron-right text-[9px] ml-0.5"></i>
                             </span>
                         `;
                         subBox.appendChild(row);
@@ -408,6 +429,14 @@
             currentPalletId = palletId;
             const pInfo = activePalletObject;
             if(!pInfo) return;
+            // 🎯【安全防護修改點】：在進入前進行最後一次狀態複查
+            const checkStatus = pInfo.status || '待撿貨';
+            if (checkStatus === "撿貨中" || checkStatus === "已完成") {
+                playBeep(300, 0.3);
+                alert(`🚫 點選失敗：該棧板剛剛已被更新為 [${checkStatus}]，無法重覆進入作業。系統將自動重新整理清單。`);
+                loadOrders(); // 自動重新整理清單
+                return;
+            }
 
             document.getElementById("lbl-pallet-no").innerText = pInfo.pallet_no || "-";
             document.getElementById("lbl-vendor").innerText = pInfo.ship_vendor || "未指定";
