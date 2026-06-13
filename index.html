@@ -208,10 +208,8 @@
                 if (users.length > 0 && String(users[0].password) === String(userPass)) {
                     const matchedUser = users[0];
                     
-                    let userRole = "user";
-                    if (matchedUser.role === "admin" || matchedUser.role === "supervisor") {
-                        userRole = "admin";
-                    }
+                    // 🎯【修正 1】：不要在這邊把 supervisor 與 admin 綁在一起。各自保留原本在資料庫定義的角色代號！
+                    let userRole = matchedUser.role ? matchedUser.role.trim().toLowerCase() : "user";
                     
                     localStorage.setItem("currentUser", JSON.stringify(matchedUser));
                     
@@ -246,9 +244,10 @@
                     alert("❌ 驗證失敗：您的帳號權限不足，非 Admin 管理員！");
                 }
             } else if (currentAuthMode === 'products') {
-                // 2. 點擊產品主檔維護：權限必須是 admin 才能進入，並且把真實姓名帶到網址中
-                if (userObject.role === 'admin') {
-                    window.location.href = `products_management.html?username=${encodeURIComponent(userObject.display_name)}`;
+                // 🎯【修正 2】：放行條件改為只要是 admin 或 supervisor 都可以進入產品維護
+                if (userObject.role === 'admin' || userObject.role === 'supervisor') {
+                    // 正確把當前真正的身分（可能是 admin 或 supervisor）傳遞出去
+                    window.location.href = `products_management.html?username=${encodeURIComponent(userObject.display_name)}&role=${encodeURIComponent(userObject.role)}`;
                 } else {
                     alert("❌ 權限不足：變更產品主檔欄位需具備【管理員】或【主管】身分！");
                 }

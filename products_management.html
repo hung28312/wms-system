@@ -20,7 +20,7 @@
                 </div>
                 <div>
                     <h1 class="text-lg font-black tracking-wider text-slate-100">產品主檔維護</h1>
-                    <p class="text-xs text-slate-400">當前操作人：<span id="operator-display" class="text-emerald-400 font-mono font-bold">讀取中...</span></p>
+                    <p class="text-xs text-slate-400">使用者：<span id="operator-display" class="text-emerald-400 font-mono font-bold">讀取中...</span></p>
                 </div>
             </div>
             <a href="index.html" class="text-xs bg-slate-700/50 hover:bg-slate-700 px-3 py-2 rounded-xl text-slate-300 hover:text-white font-medium transition-all cursor-pointer">
@@ -29,9 +29,14 @@
         </div>
 
         <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700/60 shadow-xl space-y-4 relative">
-            <h2 class="text-sm font-bold text-slate-300 flex items-center gap-2">
-                <i class="fa-solid fa-magnifying-glass text-emerald-400"></i> 第一步：輸入品號或品名關鍵字
-            </h2>
+            <div class="flex justify-between items-center">
+                <h2 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                    <i class="fa-solid fa-magnifying-glass text-emerald-400"></i> 第一步：輸入品號或品名關鍵字
+                </h2>
+                <button id="btn-show-add-mode" onclick="switchToCreateMode()" style="display: none;" class="text-xs bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-xl text-white font-bold transition-all cursor-pointer shadow-md shadow-emerald-950/50 flex items-center gap-1">
+                    <i class="fa-solid fa-plus text-[10px]"></i> 新增產品資料
+                </button>
+            </div>
             <div class="relative">
                 <div class="flex gap-3">
                     <div class="flex-1 relative">
@@ -41,21 +46,21 @@
                 </div>
 
                 <div id="search-dropdown" class="hidden absolute left-0 right-0 mt-2 bg-slate-950 border border-slate-700 rounded-xl shadow-2xl max-h-64 overflow-y-auto z-50 divide-y divide-slate-800/60">
-                    </div>
+                </div>
             </div>
         </div>
 
         <div id="edit-form-section" class="hidden bg-slate-800 p-6 rounded-2xl border border-emerald-500/20 shadow-xl space-y-6">
             <div class="border-b border-slate-700/60 pb-3 flex justify-between items-center">
-                <h2 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                <h2 id="form-mode-title" class="text-sm font-bold text-slate-300 flex items-center gap-2">
                     <i class="fa-solid fa-pen-to-square text-emerald-400"></i> 第二步：修改產品規格欄位
                 </h2>
-                <span class="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md font-mono border border-emerald-500/20">品號鎖定中</span>
+                <span id="form-badge" class="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md font-mono border border-emerald-500/20">品號鎖定中</span>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div class="sm:col-span-2">
-                    <label class="block text-xs font-bold text-slate-400 mb-1">產品品號 (固定)</label>
+                    <label id="label-item-no" class="block text-xs font-bold text-slate-400 mb-1">產品品號 (固定)</label>
                     <input type="text" id="form-item-no" disabled class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-500 font-mono cursor-not-allowed">
                 </div>
 
@@ -115,8 +120,11 @@
                 </div>
             </div>
 
-            <div class="pt-4 border-t border-slate-700/60 flex justify-end">
-                <button onclick="saveProductChange()" id="btn-save" class="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 cursor-pointer">
+            <div class="pt-4 border-t border-slate-700/60 flex flex-col sm:flex-row justify-end gap-3">
+                <button onclick="handleCancel()" type="button" class="w-full sm:w-auto bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold px-6 py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer order-2 sm:order-1">
+                    <i class="fa-solid fa-ban"></i> 取消變更
+                </button>
+                <button onclick="handleFormSubmit()" id="btn-save" class="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 cursor-pointer order-1 sm:order-2">
                     <i class="fa-solid fa-floppy-disk"></i> 儲存變更並同步雲端
                 </button>
             </div>
@@ -130,13 +138,24 @@
 
         const urlParams = new URLSearchParams(window.location.search);
         const currentOperator = urlParams.get("username") || "未明管理員";
+        
+        const currentRole = (urlParams.get("role") || "").trim().toLowerCase();
 
-        let debounceTimer; // 用於防抖，避免打字太快頻繁向資料庫發出請求
+        let debounceTimer; 
+        let isCreateMode = false; 
 
         document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("operator-display").innerText = currentOperator;
             
-            // 點擊網頁其他地方時，自動關閉下拉選單
+            const btnShowAdd = document.getElementById("btn-show-add-mode");
+            if (btnShowAdd) {
+                if (currentRole === "admin") {
+                    btnShowAdd.style.display = "block";
+                } else {
+                    btnShowAdd.style.display = "none";
+                }
+            }
+            
             document.addEventListener("click", (e) => {
                 if (!e.target.closest('#search-keyword') && !e.target.closest('#search-dropdown')) {
                     document.getElementById("search-dropdown").classList.add("hidden");
@@ -148,23 +167,21 @@
             document.getElementById("search-keyword").value = "";
             document.getElementById("search-dropdown").classList.add("hidden");
             document.getElementById("edit-form-section").classList.add("hidden");
+            resetFormToEditMode(); 
         }
 
-        // 🔍 功能一：當使用者輸入字串時，自動執行模糊聯想搜尋
         function handleSearchInput() {
             clearTimeout(debounceTimer);
             const keyword = document.getElementById("search-keyword").value.trim();
             const dropdown = document.getElementById("search-dropdown");
 
-            if (!keyword) {
+            if (!keyword || isCreateMode) {
                 dropdown.classList.add("hidden");
                 return;
             }
 
-            // 設定 300 毫秒防抖機制，等使用者停下打字再向 Supabase 發出查詢，節省網路流量
             debounceTimer = setTimeout(async () => {
                 try {
-                    // 同時對 item_no (品號) 或 item_name (品名) 進行包含模糊比對 (ilike)
                     const queryUrl = `${SUPABASE_URL}/rest/v1/products?or=(item_no.ilike.*${encodeURIComponent(keyword)}*,item_name.ilike.*${encodeURIComponent(keyword)}*)&select=item_no,item_name&limit=10`;
                     
                     const res = await fetch(queryUrl, {
@@ -180,7 +197,6 @@
                         return;
                     }
 
-                    // 渲染下拉選單的選項
                     dropdown.innerHTML = matches.map(prod => `
                         <div onclick="selectProduct('${prod.item_no}')" class="px-4 py-3 hover:bg-slate-800 cursor-pointer transition-colors flex justify-between items-center text-sm group">
                             <span class="font-mono text-emerald-400 font-bold group-hover:text-white transition-colors">${prod.item_no}</span>
@@ -196,9 +212,9 @@
             }, 300);
         }
 
-        // 🎯 功能二：點擊下拉選單的商品後，載入該商品的完整規格進表單
         async function selectProduct(itemNo) {
             document.getElementById("search-dropdown").classList.add("hidden");
+            resetFormToEditMode();
             
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/products?item_no=eq.${encodeURIComponent(itemNo)}&select=*`, {
@@ -211,24 +227,21 @@
                 if (data.length > 0) {
                     const prod = data[0];
                     
-                    // 將選中的名稱填回搜尋框
                     document.getElementById("search-keyword").value = `${prod.item_no} - ${prod.item_name}`;
 
-                    // 填入詳細表單
                     document.getElementById("form-item-no").value = prod.item_no || "";
                     document.getElementById("form-item-name").value = prod.item_name || "";
                     document.getElementById("form-spec").value = prod.spec || "";
                     document.getElementById("form-pack-qty").value = prod.pack_qty || "";
                     document.getElementById("form-pallets-box-qty").value = prod.pallets_box_qty || "";
                     document.getElementById("form-base-qty").value = prod.base_qty || "";
-                    document.getElementById("form-cubic").value = prod.cubic_per_box || ""; // 完美對齊資料庫欄位名稱
+                    document.getElementById("form-cubic").value = prod.cubic_per_box || ""; 
                     document.getElementById("form-gross-weight").value = prod.gross_weight || "";
                     document.getElementById("form-length").value = prod.length || "";
                     document.getElementById("form-width").value = prod.width || "";
                     document.getElementById("form-height").value = prod.height || "";
                     document.getElementById("form-shelf-life").value = prod.shelf_life || "";
 
-                    // 打開編輯面板
                     document.getElementById("edit-form-section").classList.remove("hidden");
                 }
             } catch (err) {
@@ -236,7 +249,141 @@
             }
         }
 
-        // 💾 功能三：將變更內容儲存回傳給 Supabase
+        function switchToCreateMode() {
+            isCreateMode = true;
+            document.getElementById("search-keyword").value = "✨ 正在建立全新產品項目記錄";
+            document.getElementById("form-mode-title").innerHTML = `<i class="fa-solid fa-folder-plus text-cyan-400"></i> 第二步：建立全新產品記錄`;
+            
+            const badge = document.getElementById("form-badge");
+            badge.innerText = "全新建立模式";
+            badge.className = "text-xs bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded-md font-mono border border-cyan-500/20";
+            
+            document.getElementById("label-item-no").innerHTML = `產品品號 <span class="text-rose-400">*必填且不得重複</span>`;
+            const itemNoInput = document.getElementById("form-item-no");
+            itemNoInput.disabled = false;
+            itemNoInput.className = "w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-cyan-500";
+            
+            clearFormFields();
+            
+            const btnSave = document.getElementById("btn-save");
+            btnSave.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> 確認新增並發布雲端`;
+            btnSave.className = "w-full sm:w-auto bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-cyan-950/40 flex items-center justify-center gap-2 cursor-pointer order-1 sm:order-2";
+            
+            document.getElementById("edit-form-section").classList.remove("hidden");
+        }
+
+        function resetFormToEditMode() {
+            isCreateMode = false;
+            document.getElementById("form-mode-title").innerHTML = `<i class="fa-solid fa-pen-to-square text-emerald-400"></i> 第二步：修改產品規格欄位`;
+            
+            const badge = document.getElementById("form-badge");
+            badge.innerText = "品號鎖定中";
+            badge.className = "text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md font-mono border border-emerald-500/20";
+            
+            document.getElementById("label-item-no").innerText = "產品品號 (固定)";
+            const itemNoInput = document.getElementById("form-item-no");
+            itemNoInput.disabled = true;
+            itemNoInput.className = "w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-500 font-mono cursor-not-allowed";
+            
+            const btnSave = document.getElementById("btn-save");
+            btnSave.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> 儲存變更並同步雲端`;
+            btnSave.className = "w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 cursor-pointer order-1 sm:order-2";
+        }
+
+        function clearFormFields() {
+            document.getElementById("form-item-no").value = "";
+            document.getElementById("form-item-name").value = "";
+            document.getElementById("form-spec").value = "";
+            document.getElementById("form-pack-qty").value = "";
+            document.getElementById("form-pallets-box-qty").value = "";
+            document.getElementById("form-base-qty").value = "";
+            document.getElementById("form-cubic").value = "";
+            document.getElementById("form-gross-weight").value = "";
+            document.getElementById("form-length").value = "";
+            document.getElementById("form-width").value = "";
+            document.getElementById("form-height").value = "";
+            document.getElementById("form-shelf-life").value = "";
+        }
+
+        // 🚫 取消按鈕處理邏輯
+        function handleCancel() {
+            if (confirm("確定要取消本次操作嗎？未儲存的變更將會遺失。")) {
+                clearSearch();
+            }
+        }
+
+        function handleFormSubmit() {
+            if (isCreateMode) {
+                executeInsertProduct();
+            } else {
+                saveProductChange(); 
+            }
+        }
+
+        async function executeInsertProduct() {
+            const itemNo = document.getElementById("form-item-no").value.trim();
+            const itemName = document.getElementById("form-item-name").value.trim();
+            const btnSave = document.getElementById("btn-save");
+
+            if (!itemNo || !itemName) {
+                alert("❌ 產品品號與產品品名為必填欄位！");
+                return;
+            }
+
+            const insertData = {
+                item_no: itemNo, 
+                item_name: itemName,
+                spec: document.getElementById("form-spec").value.trim(),
+                pack_qty: document.getElementById("form-pack-qty").value ? parseInt(document.getElementById("form-pack-qty").value) : null,
+                pallets_box_qty: document.getElementById("form-pallets-box-qty").value ? parseInt(document.getElementById("form-pallets-box-qty").value) : null,
+                base_qty: document.getElementById("form-base-qty").value ? parseInt(document.getElementById("form-base-qty").value) : null,
+                cubic_per_box: document.getElementById("form-cubic").value ? parseFloat(document.getElementById("form-cubic").value) : null,
+                gross_weight: document.getElementById("form-gross-weight").value ? parseFloat(document.getElementById("form-gross-weight").value) : null,
+                length: document.getElementById("form-length").value ? parseFloat(document.getElementById("form-length").value) : null,
+                width: document.getElementById("form-width").value ? parseFloat(document.getElementById("form-width").value) : null,
+                height: document.getElementById("form-height").value ? parseFloat(document.getElementById("form-height").value) : null,
+                shelf_life: document.getElementById("form-shelf-life").value.trim(),
+                updated_by: `${currentOperator}`
+            };
+
+            if (!confirm(`確定要建立全新產品 [${itemNo} - ${itemName}] 嗎？`)) {
+                return;
+            }
+
+            btnSave.disabled = true;
+            btnSave.innerHTML = `<i class="fa-solid fa-spinner animate-spin mr-2"></i> 正在發布雲端...`;
+
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/products`, {
+                    method: "POST",
+                    headers: {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": `Bearer ${SUPABASE_KEY}`,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal"
+                    },
+                    body: JSON.stringify(insertData)
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    if (errText.includes("duplicate key")) {
+                        throw new Error(`品號 [${itemNo}] 已經重複存在於系統中，請勿重複建立！`);
+                    }
+                    throw new Error(errText);
+                }
+
+                alert(`🎉 新增成功！\n全新產品 [${itemNo}] 已成功寫入雲端主檔。`);
+                clearSearch();
+
+            } catch (err) {
+                alert(`建立失敗: ${err.message}`);
+            } finally {
+                btnSave.disabled = false;
+                resetFormToEditMode();
+            }
+        }
+
         async function saveProductChange() {
             const itemNo = document.getElementById("form-item-no").value;
             const btnSave = document.getElementById("btn-save");
@@ -268,7 +415,6 @@
             btnSave.innerHTML = `<i class="fa-solid fa-spinner animate-spin mr-2"></i> 正在上傳至雲端...`;
 
             try {
-                // 第一階段：更新主規格
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/products?item_no=eq.${encodeURIComponent(itemNo)}`, {
                     method: "PATCH",
                     headers: {
@@ -285,7 +431,6 @@
                     throw new Error(errText);
                 }
 
-                // 第二階段：傳入修改人歷史歷程 (採用安全容錯機制)
                 try {
                     await fetch(`${SUPABASE_URL}/rest/v1/products?item_no=eq.${encodeURIComponent(itemNo)}`, {
                         method: "PATCH",
@@ -302,6 +447,7 @@
                 }
 
                 alert(`🎉 儲存成功！\n品號 [${itemNo}] 的最新規格已成功同步至雲端系統。`);
+                clearSearch(); // 儲存成功也自動回初始畫面
                 
             } catch (err) {
                 alert(`儲存失敗: 發生技術性錯誤\n${err.message}`);
