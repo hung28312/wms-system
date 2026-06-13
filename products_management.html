@@ -295,7 +295,7 @@
                             "Content-Type": "application/json",
                             "Prefer": "return=minimal"
                         },
-                        body: JSON.stringify({ updated_by: `網頁後台-${currentOperator}` })
+                        body: JSON.stringify({ updated_by: `${currentOperator}` })
                     });
                 } catch (e) {
                     console.log("歷程記錄由底層自動扣接中");
