@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS 產品主檔維護系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans antialiased min-h-screen p-4 md:p-8">
+
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.15),transparent_45%)] pointer-events-none"></div>
+
+    <div class="max-w-2xl mx-auto space-y-6 relative z-10">
+        
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-800/60 p-4 rounded-2xl border border-slate-700/50 gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-emerald-500/20 text-emerald-400 p-3 rounded-xl border border-emerald-500/30">
+                    <i class="fa-solid fa-boxes-packing text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-black tracking-wider text-slate-100">產品主檔維護</h1>
+                    <p class="text-xs text-slate-400">當前操作人：<span id="operator-display" class="text-emerald-400 font-mono font-bold">讀取中...</span></p>
+                </div>
+            </div>
+            <a href="index.html" class="text-xs bg-slate-700/50 hover:bg-slate-700 px-3 py-2 rounded-xl text-slate-300 hover:text-white font-medium transition-all cursor-pointer">
+                <i class="fa-solid fa-arrow-left mr-1"></i> 回主選單
+            </a>
+        </div>
+
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700/60 shadow-xl space-y-4">
+            <h2 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                <i class="fa-solid fa-magnifying-glass text-emerald-400"></i> 第一步：請輸入品號載入資料
+            </h2>
+            <div class="flex gap-3">
+                <div class="flex-1 relative">
+                    <input type="text" id="search-item-no" placeholder="請輸入產品品號 (如: 100050)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-4 pr-10 py-3 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-emerald-500 text-lg">
+                    <button onclick="clearSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><i class="fa-solid fa-circle-xmark"></i></button>
+                </div>
+                <button onclick="fetchProduct()" id="btn-search" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> 載入
+                </button>
+            </div>
+        </div>
+
+        <div id="edit-form-section" class="hidden bg-slate-800 p-6 rounded-2xl border border-emerald-500/20 shadow-xl space-y-6">
+            <div class="border-b border-slate-700/60 pb-3 flex justify-between items-center">
+                <h2 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-emerald-400"></i> 第二步：修改產品規格欄位
+                </h2>
+                <span class="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md font-mono border border-emerald-500/20">品號鎖定中</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-bold text-slate-400 mb-1">產品品號 (固定)</label>
+                    <input type="text" id="form-item-no" disabled class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-500 font-mono cursor-not-allowed">
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-bold text-slate-400 mb-1">產品品名</label>
+                    <input type="text" id="form-item-name" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">產品規格</label>
+                    <input type="text" id="form-spec" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">入數 (包/箱)</label>
+                    <input type="number" id="form-pack-qty" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">每板標準箱數 (滿板)</label>
+                    <input type="number" id="form-pallets-box-qty" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">每層底數 (箱/層)</label>
+                    <input type="number" id="form-base-qty" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">才積 / 箱 (Cubic)</label>
+                    <input type="number" step="0.001" id="form-cubic" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">單箱毛重 (kg)</label>
+                    <input type="number" step="0.01" id="form-gross-weight" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">外箱長度 (cm)</label>
+                    <input type="number" step="0.1" id="form-length" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">外箱寬度 (cm)</label>
+                    <input type="number" step="0.1" id="form-width" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">外箱高度 (cm)</label>
+                    <input type="number" step="0.1" id="form-height" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">保存年限 (天/月)</label>
+                    <input type="text" id="form-shelf-life" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-700/60 flex justify-end">
+                <button onclick="saveProductChange()" id="btn-save" class="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-floppy-disk"></i> 儲存變更並同步雲端
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14";
+
+        // 從網址解析出目前是哪位管理員登入 (?username=XXXX)
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentOperator = urlParams.get("username") || "未明管理員";
+
+        // 初始化畫面
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("operator-display").innerText = currentOperator;
+            
+            // 綁定 Enter 鍵直接搜尋
+            document.getElementById("search-item-no").addEventListener("keypress", (e) => {
+                if (e.key === "Enter") fetchProduct();
+            });
+        });
+
+        function clearSearch() {
+            document.getElementById("search-item-no").value = "";
+            document.getElementById("edit-form-section").classList.add("hidden");
+        }
+
+        // 🔍 功能一：依品號抓取 Supabase 產品資料
+        async function fetchProduct() {
+            const itemNo = document.getElementById("search-item-no").value.trim();
+            const btnSearch = document.getElementById("btn-search");
+
+            if (!itemNo) {
+                alert("請輸入品號！");
+                return;
+            }
+
+            btnSearch.disabled = true;
+            btnSearch.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i>`;
+
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/products?item_no=eq.${encodeURIComponent(itemNo)}&select=*`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                });
+
+                if (!res.ok) throw new Error("資料庫連線失敗");
+                const data = await res.json();
+
+                if (data.length === 0) {
+                    alert(`❌ 找不到此產品品號 [${itemNo}]，請確認是否輸入錯誤！`);
+                    document.getElementById("edit-form-section").classList.add("hidden");
+                } else {
+                    // 帶入欄位值
+                    const prod = data[0];
+                    document.getElementById("form-item-no").value = prod.item_no || "";
+                    document.getElementById("form-item-name").value = prod.item_name || "";
+                    document.getElementById("form-spec").value = prod.spec || "";
+                    document.getElementById("form-pack-qty").value = prod.pack_qty || "";
+                    document.getElementById("form-pallets-box-qty").value = prod.pallets_box_qty || "";
+                    document.getElementById("form-base-qty").value = prod.base_qty || "";
+                    document.getElementById("form-cubic").value = prod.cubic_per_box || "";
+                    document.getElementById("form-gross-weight").value = prod.gross_weight || "";
+                    document.getElementById("form-length").value = prod.length || "";
+                    document.getElementById("form-width").value = prod.width || "";
+                    document.getElementById("form-height").value = prod.height || "";
+                    document.getElementById("form-shelf-life").value = prod.shelf_life || "";
+
+                    // 打開編輯面板
+                    document.getElementById("edit-form-section").classList.remove("hidden");
+                }
+            } catch (err) {
+                alert(`讀取失敗: ${err.message}`);
+            } finally {
+                btnSearch.disabled = false;
+                btnSearch.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> 載入`;
+            }
+        }
+
+        // 💾 功能二：將變更內容儲存回傳給 Supabase (附帶變更人)
+        async function saveProductChange() {
+            const itemNo = document.getElementById("form-item-no").value;
+            const btnSave = document.getElementById("btn-save");
+
+            const updateData = {
+                item_name: document.getElementById("form-item-name").value.trim(),
+                spec: document.getElementById("form-spec").value.trim(),
+                pack_qty: document.getElementById("form-pack-qty").value ? parseInt(document.getElementById("form-pack-qty").value) : null,
+                pallets_box_qty: document.getElementById("form-pallets-box-qty").value ? parseInt(document.getElementById("form-pallets-box-qty").value) : null,
+                base_qty: document.getElementById("form-base-qty").value ? parseInt(document.getElementById("form-base-qty").value) : null,
+                cubic_per_box: document.getElementById("form-cubic").value ? parseFloat(document.getElementById("form-cubic").value) : null,
+                gross_weight: document.getElementById("form-gross-weight").value ? parseFloat(document.getElementById("form-gross-weight").value) : null,
+                length: document.getElementById("form-length").value ? parseFloat(document.getElementById("form-length").value) : null,
+                width: document.getElementById("form-width").value ? parseFloat(document.getElementById("form-width").value) : null,
+                height: document.getElementById("form-height").value ? parseFloat(document.getElementById("form-height").value) : null,
+                shelf_life: document.getElementById("form-shelf-life").value.trim(),
+                
+                // 🎯 關鍵核心：填寫修改人！這會直接被資料庫觸發器抄寫至稽核歷史紀錄表中
+                updated_by: `網頁後台-${currentOperator}`
+            };
+
+            if (!updateData.item_name) {
+                alert("產品品名不能為空！");
+                return;
+            }
+
+            if (!confirm(`確定要儲存品號 [${itemNo}] 的變更嗎？\n此動作將會立即同步更新雲端資料。`)) {
+                return;
+            }
+
+            btnSave.disabled = true;
+            btnSave.innerHTML = `<i class="fa-solid fa-spinner animate-spin mr-2"></i> 正在上傳至雲端...`;
+
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/products?item_no=eq.${encodeURIComponent(itemNo)}`, {
+                    method: "PATCH",
+                    headers: {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": `Bearer ${SUPABASE_KEY}`,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal"
+                    },
+                    body: JSON.stringify(updateData)
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText);
+                }
+
+                alert(`🎉 儲存成功！\n品號 [${itemNo}] 的最新規格已更新成功。`);
+                
+            } catch (err) {
+                alert(`儲存失敗: 發生技術性錯誤\n${err.message}`);
+            } finally {
+                btnSave.disabled = false;
+                btnSave.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> 儲存變更並同步雲端`;
+            }
+        }
+    </script>
+</body>
+</html>

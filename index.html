@@ -51,12 +51,25 @@
                 </div>
             </button>
 
+            <button onclick="openAuthModal('products')" class="w-full flex items-center gap-4 bg-slate-800/80 hover:bg-slate-800 p-5 rounded-2xl border border-slate-700/60 shadow-md hover:border-emerald-500/50 hover:shadow-emerald-900/20 transition-all duration-200 group text-left cursor-pointer">
+                <div class="bg-emerald-500/10 text-emerald-400 p-3 rounded-xl group-hover:scale-110 transition-transform">
+                    <i class="fa-solid fa-boxes-packing text-xl"></i>
+                </div>
+                <div class="flex-1">
+                    <h2 class="text-base font-bold text-slate-200 group-hover:text-emerald-400 transition-colors">3. 產品主檔維護</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">雲端產品規格、才積、毛重增修與變更歷程</p>
+                </div>
+                <div class="text-slate-500 group-hover:text-emerald-400 transition-colors">
+                    <i class="fa-solid fa-shield-halved text-sm"></i>
+                </div>
+            </button>
+
             <button onclick="openAuthModal('user')" class="w-full flex items-center gap-4 bg-slate-800/80 hover:bg-slate-800 p-5 rounded-2xl border border-slate-700/60 shadow-md hover:border-amber-500/50 hover:shadow-amber-900/20 transition-all duration-200 group text-left cursor-pointer">
                 <div class="bg-amber-500/10 text-amber-400 p-3 rounded-xl group-hover:scale-110 transition-transform">
                     <i class="fa-solid fa-key text-xl"></i>
                 </div>
                 <div class="flex-1">
-                    <h2 class="text-base font-bold text-slate-200 group-hover:text-amber-400 transition-colors">3. 密碼變更</h2>
+                    <h2 class="text-base font-bold text-slate-200 group-hover:text-amber-400 transition-colors">4. 密碼變更</h2>
                     <p class="text-xs text-slate-400 mt-0.5">修改個人帳戶登入憑證與資安維護</p>
                 </div>
                 <div class="text-slate-500 group-hover:text-amber-400 transition-colors">
@@ -125,7 +138,6 @@
     </div>
 
     <script>
-        // 🚀 100% 精準對接您原稿的設定
         const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14";
 
@@ -144,6 +156,11 @@
                 icon.innerHTML = `<span class="text-indigo-400"><i class="fa-solid fa-user-shield"></i></span>`;
                 title.innerText = "管理後台身分驗證";
                 desc.innerText = "此功能限系統最高管理員(admin)權限進入";
+            } else if (mode === 'products') {
+                // 🎯 為產品主檔維護特製的彈窗外觀
+                icon.innerHTML = `<span class="text-emerald-400"><i class="fa-solid fa-boxes-packing"></i></span>`;
+                title.innerText = "產品主檔維護驗證";
+                desc.innerText = "變更產品才積毛重影響重大，限管理員進入";
             } else {
                 icon.innerHTML = `<span class="text-amber-400"><i class="fa-solid fa-user-lock"></i></span>`;
                 title.innerText = "變更密碼身分驗證";
@@ -167,9 +184,8 @@
                 return;
             }
 
-// 🛠️ 測試機制優化：若輸入測試密碼 admin123，直接本機放行
+            // 🛠️ 本機測試放行機制
             if (userPass === "admin123") {
-                // 🎯【修改點】：將工號 "1" 也加入本機測試放行的管理員清單
                 const isTestAdmin = (userId === "120404" || userId === "1" || userId.toLowerCase().includes("admin"));
                 executeLoginSuccess({
                     username: userId,
@@ -195,16 +211,12 @@
                 if (users.length > 0 && String(users[0].password) === String(userPass)) {
                     const matchedUser = users[0];
                     
-                    // 🎯【核心修正】：移除原本寫死的 120404 與 admin 判定
-                    // 直接讀取資料庫的 role 欄位。只要 role 是 "admin" 或 "supervisor" 就算管理員
                     let userRole = "user";
                     if (matchedUser.role === "admin" || matchedUser.role === "supervisor") {
                         userRole = "admin";
                     }
                     
-                    // 💾 (選填優化) 同步將當前登入者存入快取，供後續頁面辨認
                     localStorage.setItem("currentUser", JSON.stringify(matchedUser));
-                    
                     executeLoginSuccess({ username: matchedUser.username, role: userRole });
                 } else {
                     alert("❌ 工號或密碼錯誤，請重新確認！");
@@ -220,12 +232,21 @@
 
         function executeLoginSuccess(userObject) {
             closeAuthModal();
+            
             if (currentAuthMode === 'admin') {
                 if (userObject.role === 'admin') {
                     document.getElementById("main-menu").classList.add("hidden");
                     document.getElementById("admin-menu-section").classList.remove("hidden");
                 } else {
                     alert("❌ 驗證失敗：您的帳號權限不足，非 Admin 管理員！");
+                }
+            } else if (currentAuthMode === 'products') {
+                // 🎯 產品主檔驗證成功的跳轉邏輯
+                if (userObject.role === 'admin') {
+                    // 通過驗證，跳轉至產品主檔管理頁面 (附帶當前登入者名稱，以便我們之前做修改歷程)
+                    window.location.href = `products_management.html?username=${encodeURIComponent(userObject.username)}`;
+                } else {
+                    alert("❌ 權限不足：變更產品主檔欄位需具備【管理員】或【主管】身分！");
                 }
             } else {
                 window.location.href = `change_password.html?picker_id=${encodeURIComponent(userObject.username)}`;
