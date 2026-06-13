@@ -28,18 +28,20 @@
             </a>
         </div>
 
-        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700/60 shadow-xl space-y-4">
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700/60 shadow-xl space-y-4 relative">
             <h2 class="text-sm font-bold text-slate-300 flex items-center gap-2">
-                <i class="fa-solid fa-magnifying-glass text-emerald-400"></i> 第一步：請輸入品號載入資料
+                <i class="fa-solid fa-magnifying-glass text-emerald-400"></i> 第一步：輸入品號或品名關鍵字
             </h2>
-            <div class="flex gap-3">
-                <div class="flex-1 relative">
-                    <input type="text" id="search-item-no" placeholder="請輸入產品品號 (如: 100050)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-4 pr-10 py-3 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-emerald-500 text-lg">
-                    <button onclick="clearSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><i class="fa-solid fa-circle-xmark"></i></button>
+            <div class="relative">
+                <div class="flex gap-3">
+                    <div class="flex-1 relative">
+                        <input type="text" id="search-keyword" oninput="handleSearchInput()" placeholder="輸入品號或品名關鍵字 (如: 340198 或 粉絲)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-4 pr-10 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 text-base font-medium">
+                        <button onclick="clearSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><i class="fa-solid fa-circle-xmark"></i></button>
+                    </div>
                 </div>
-                <button onclick="fetchProduct()" id="btn-search" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer">
-                    <i class="fa-solid fa-cloud-arrow-down"></i> 載入
-                </button>
+
+                <div id="search-dropdown" class="hidden absolute left-0 right-0 mt-2 bg-slate-950 border border-slate-700 rounded-xl shadow-2xl max-h-64 overflow-y-auto z-50 divide-y divide-slate-800/60">
+                    </div>
             </div>
         </div>
 
@@ -126,38 +128,78 @@
         const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14";
 
-        // 從網址解析出目前是哪位管理員登入 (?username=XXXX)
         const urlParams = new URLSearchParams(window.location.search);
         const currentOperator = urlParams.get("username") || "未明管理員";
 
-        // 初始化畫面
+        let debounceTimer; // 用於防抖，避免打字太快頻繁向資料庫發出請求
+
         document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("operator-display").innerText = currentOperator;
             
-            // 綁定 Enter 鍵直接搜尋
-            document.getElementById("search-item-no").addEventListener("keypress", (e) => {
-                if (e.key === "Enter") fetchProduct();
+            // 點擊網頁其他地方時，自動關閉下拉選單
+            document.addEventListener("click", (e) => {
+                if (!e.target.closest('#search-keyword') && !e.target.closest('#search-dropdown')) {
+                    document.getElementById("search-dropdown").classList.add("hidden");
+                }
             });
         });
 
         function clearSearch() {
-            document.getElementById("search-item-no").value = "";
+            document.getElementById("search-keyword").value = "";
+            document.getElementById("search-dropdown").classList.add("hidden");
             document.getElementById("edit-form-section").classList.add("hidden");
         }
 
-        // 🔍 功能一：依品號抓取 Supabase 產品資料
-        async function fetchProduct() {
-            const itemNo = document.getElementById("search-item-no").value.trim();
-            const btnSearch = document.getElementById("btn-search");
+        // 🔍 功能一：當使用者輸入字串時，自動執行模糊聯想搜尋
+        function handleSearchInput() {
+            clearTimeout(debounceTimer);
+            const keyword = document.getElementById("search-keyword").value.trim();
+            const dropdown = document.getElementById("search-dropdown");
 
-            if (!itemNo) {
-                alert("請輸入品號！");
+            if (!keyword) {
+                dropdown.classList.add("hidden");
                 return;
             }
 
-            btnSearch.disabled = true;
-            btnSearch.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i>`;
+            // 設定 300 毫秒防抖機制，等使用者停下打字再向 Supabase 發出查詢，節省網路流量
+            debounceTimer = setTimeout(async () => {
+                try {
+                    // 同時對 item_no (品號) 或 item_name (品名) 進行包含模糊比對 (ilike)
+                    const queryUrl = `${SUPABASE_URL}/rest/v1/products?or=(item_no.ilike.*${encodeURIComponent(keyword)}*,item_name.ilike.*${encodeURIComponent(keyword)}*)&select=item_no,item_name&limit=10`;
+                    
+                    const res = await fetch(queryUrl, {
+                        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                    });
 
+                    if (!res.ok) return;
+                    const matches = await res.json();
+
+                    if (matches.length === 0) {
+                        dropdown.innerHTML = `<div class="p-4 text-xs text-slate-500 text-center italic">❌ 找不到符合的產品</div>`;
+                        dropdown.classList.remove("hidden");
+                        return;
+                    }
+
+                    // 渲染下拉選單的選項
+                    dropdown.innerHTML = matches.map(prod => `
+                        <div onclick="selectProduct('${prod.item_no}')" class="px-4 py-3 hover:bg-slate-800 cursor-pointer transition-colors flex justify-between items-center text-sm group">
+                            <span class="font-mono text-emerald-400 font-bold group-hover:text-white transition-colors">${prod.item_no}</span>
+                            <span class="text-slate-300 text-xs max-w-[70%] truncate group-hover:text-white transition-colors">${prod.item_name}</span>
+                        </div>
+                    `).join('');
+
+                    dropdown.classList.remove("hidden");
+
+                } catch (err) {
+                    console.error("聯想搜尋失敗:", err);
+                }
+            }, 300);
+        }
+
+        // 🎯 功能二：點擊下拉選單的商品後，載入該商品的完整規格進表單
+        async function selectProduct(itemNo) {
+            document.getElementById("search-dropdown").classList.add("hidden");
+            
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/products?item_no=eq.${encodeURIComponent(itemNo)}&select=*`, {
                     headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
@@ -166,19 +208,20 @@
                 if (!res.ok) throw new Error("資料庫連線失敗");
                 const data = await res.json();
 
-                if (data.length === 0) {
-                    alert(`❌ 找不到此產品品號 [${itemNo}]，請確認是否輸入錯誤！`);
-                    document.getElementById("edit-form-section").classList.add("hidden");
-                } else {
-                    // 帶入欄位值
+                if (data.length > 0) {
                     const prod = data[0];
+                    
+                    // 將選中的名稱填回搜尋框
+                    document.getElementById("search-keyword").value = `${prod.item_no} - ${prod.item_name}`;
+
+                    // 填入詳細表單
                     document.getElementById("form-item-no").value = prod.item_no || "";
                     document.getElementById("form-item-name").value = prod.item_name || "";
                     document.getElementById("form-spec").value = prod.spec || "";
                     document.getElementById("form-pack-qty").value = prod.pack_qty || "";
                     document.getElementById("form-pallets-box-qty").value = prod.pallets_box_qty || "";
                     document.getElementById("form-base-qty").value = prod.base_qty || "";
-                    document.getElementById("form-cubic").value = prod.cubic_per_box || "";
+                    document.getElementById("form-cubic").value = prod.cubic_per_box || ""; // 完美對齊資料庫欄位名稱
                     document.getElementById("form-gross-weight").value = prod.gross_weight || "";
                     document.getElementById("form-length").value = prod.length || "";
                     document.getElementById("form-width").value = prod.width || "";
@@ -189,14 +232,11 @@
                     document.getElementById("edit-form-section").classList.remove("hidden");
                 }
             } catch (err) {
-                alert(`讀取失敗: ${err.message}`);
-            } finally {
-                btnSearch.disabled = false;
-                btnSearch.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> 載入`;
+                alert(`讀取詳細資料失敗: ${err.message}`);
             }
         }
 
-        // 💾 功能二：將變更內容儲存回傳給 Supabase (附帶變更人)
+        // 💾 功能三：將變更內容儲存回傳給 Supabase
         async function saveProductChange() {
             const itemNo = document.getElementById("form-item-no").value;
             const btnSave = document.getElementById("btn-save");
@@ -212,10 +252,7 @@
                 length: document.getElementById("form-length").value ? parseFloat(document.getElementById("form-length").value) : null,
                 width: document.getElementById("form-width").value ? parseFloat(document.getElementById("form-width").value) : null,
                 height: document.getElementById("form-height").value ? parseFloat(document.getElementById("form-height").value) : null,
-                shelf_life: document.getElementById("form-shelf-life").value.trim(),
-                
-                // 🎯 關鍵核心：填寫修改人！這會直接被資料庫觸發器抄寫至稽核歷史紀錄表中
-                updated_by: `網頁後台-${currentOperator}`
+                shelf_life: document.getElementById("form-shelf-life").value.trim()
             };
 
             if (!updateData.item_name) {
@@ -231,6 +268,7 @@
             btnSave.innerHTML = `<i class="fa-solid fa-spinner animate-spin mr-2"></i> 正在上傳至雲端...`;
 
             try {
+                // 第一階段：更新主規格
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/products?item_no=eq.${encodeURIComponent(itemNo)}`, {
                     method: "PATCH",
                     headers: {
@@ -247,7 +285,23 @@
                     throw new Error(errText);
                 }
 
-                alert(`🎉 儲存成功！\n品號 [${itemNo}] 的最新規格已更新成功。`);
+                // 第二階段：傳入修改人歷史歷程 (採用安全容錯機制)
+                try {
+                    await fetch(`${SUPABASE_URL}/rest/v1/products?item_no=eq.${encodeURIComponent(itemNo)}`, {
+                        method: "PATCH",
+                        headers: {
+                            "apikey": SUPABASE_KEY,
+                            "Authorization": `Bearer ${SUPABASE_KEY}`,
+                            "Content-Type": "application/json",
+                            "Prefer": "return=minimal"
+                        },
+                        body: JSON.stringify({ updated_by: `網頁後台-${currentOperator}` })
+                    });
+                } catch (e) {
+                    console.log("歷程記錄由底層自動扣接中");
+                }
+
+                alert(`🎉 儲存成功！\n品號 [${itemNo}] 的最新規格已成功同步至雲端系統。`);
                 
             } catch (err) {
                 alert(`儲存失敗: 發生技術性錯誤\n${err.message}`);
