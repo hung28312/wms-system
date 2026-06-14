@@ -88,7 +88,7 @@
 
         document.addEventListener("DOMContentLoaded", () => {
             // 1. 顯示精確的使用者名稱與職稱
-            const roleBadge = (currentRole === 'admin') ? '系統管理員' : '高階主管';
+            const roleBadge = (currentRole === 'admin') ? '系統管理員' : '主管';
             document.getElementById("user-display").innerText = `${currentOperator} (${roleBadge})`;
 
             // 2. 🎯 精確編碼配置檔案路徑：解決中文字元與空白「-UI .xlsm」導致的網頁 404 問題
