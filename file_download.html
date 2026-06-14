@@ -1,1 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS 核心營運文件下載專區</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans antialiased min-h-screen p-4 md:p-8 flex items-center justify-center">
 
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(6,182,212,0.15),transparent_45%)] pointer-events-none"></div>
+
+    <div class="max-w-xl w-full space-y-6 relative z-10">
+        
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-800/60 p-4 rounded-2xl border border-slate-700/50 gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-cyan-500/20 text-cyan-400 p-3 rounded-xl border border-cyan-500/30">
+                    <i class="fa-solid fa-cloud-arrow-down text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-base font-black tracking-wider text-slate-100">核心營運文件下載</h1>
+                    <p class="text-xs text-slate-400">登入權限：<span id="user-display" class="text-cyan-400 font-mono font-bold">驗證中...</span></p>
+                </div>
+            </div>
+            <a href="index.html" class="text-xs bg-slate-700/50 hover:bg-slate-700 px-3 py-2 rounded-xl text-slate-300 hover:text-white font-medium transition-all cursor-pointer">
+                <i class="fa-solid fa-arrow-left mr-1"></i> 回主選單
+            </a>
+        </div>
+
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700/60 shadow-xl space-y-4">
+            <h2 class="text-xs font-bold text-slate-400 tracking-wider mb-2 flex items-center gap-1.5">
+                <i class="fa-solid fa-file-shield text-cyan-400"></i> 請選擇欲下載的系統或主檔資料
+            </h2>
+
+            <div class="space-y-3" id="download-list">
+
+                <a id="link-download-1" download class="flex items-center gap-4 bg-slate-900/60 hover:bg-slate-900 p-4 rounded-xl border border-slate-800 hover:border-cyan-500/40 shadow-sm transition-all group cursor-pointer">
+                    <div class="bg-amber-500/10 text-amber-400 p-3 rounded-xl group-hover:scale-105 transition-transform">
+                        <i class="fa-regular fa-file-excel text-xl"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-sm font-bold text-slate-200 group-hover:text-cyan-400 transition-colors truncate">1. 單機作業排板系統</h3>
+                        <p class="text-[11px] text-slate-500 font-mono mt-0.5 truncate">files/日正棧板堆壘系統-20260612-UI .xlsm</p>
+                    </div>
+                    <div class="text-slate-600 group-hover:text-cyan-400 transition-all px-2 text-xs font-semibold flex items-center gap-1">
+                        <span>下載</span> <i class="fa-solid fa-download animate-pulse"></i>
+                    </div>
+                </a>
+
+                <a id="link-download-2" download class="flex items-center gap-4 bg-slate-900/60 hover:bg-slate-900 p-4 rounded-xl border border-slate-800 hover:border-cyan-500/40 shadow-sm transition-all group cursor-pointer">
+                    <div class="bg-emerald-500/10 text-emerald-400 p-3 rounded-xl group-hover:scale-105 transition-transform">
+                        <i class="fa-regular fa-file-excel text-xl"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-sm font-bold text-slate-200 group-hover:text-cyan-400 transition-colors truncate">2. 產品雲端排板系統</h3>
+                        <p class="text-[11px] text-slate-500 font-mono mt-0.5 truncate">files/日正棧板堆壘系統-20260613-UI .xlsm</p>
+                    </div>
+                    <div class="text-slate-600 group-hover:text-cyan-400 transition-all px-2 text-xs font-semibold flex items-center gap-1">
+                        <span>下載</span> <i class="fa-solid fa-download animate-pulse"></i>
+                    </div>
+                </a>
+
+                <div onclick="handlePendingDownload()" class="flex items-center gap-4 bg-slate-900/20 p-4 rounded-xl border border-slate-800/40 opacity-60 transition-all relative group cursor-not-allowed">
+                    <div class="bg-slate-700/20 text-slate-500 p-3 rounded-xl">
+                        <i class="fa-solid fa-database text-xl"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-sm font-bold text-slate-400 truncate">3. 產品主檔下載</h3>
+                        <p class="text-[11px] text-slate-600 font-mono mt-0.5 truncate">連結目前尚未配置</p>
+                    </div>
+                    <div class="text-slate-600 px-2 text-xs font-medium flex items-center gap-1">
+                        <span class="bg-slate-800 px-2 py-1 rounded-md text-[10px] text-slate-500 border border-slate-700/50">整備中</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <p class="text-center text-[11px] text-slate-600 font-mono">Secure Document Distribution Network | © 2026 WMS Control.</p>
+    </div>
+
+    <script>
+        // 初始化讀取網址列傳遞過來的操作人員與身分
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentOperator = urlParams.get("username") || "進階同仁";
+        const currentRole = (urlParams.get("role") || "user").trim().toLowerCase();
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // 1. 顯示精確的使用者名稱與職稱
+            const roleBadge = (currentRole === 'admin') ? '系統管理員' : '高階主管';
+            document.getElementById("user-display").innerText = `${currentOperator} (${roleBadge})`;
+
+            // 2. 🎯 精確編碼配置檔案路徑：解決中文字元與空白「-UI .xlsm」導致的網頁 404 問題
+            const file1Name = "日正棧板堆壘系統-20260612-UI .xlsm";
+            const file2Name = "日正棧板堆壘系統-20260613-UI .xlsm";
+
+            // 組裝路徑 (轉為網頁安全字串：例如空白會被轉為 %20)
+            document.getElementById("link-download-1").href = `files/${encodeURIComponent(file1Name)}`;
+            document.getElementById("link-download-2").href = `files/${encodeURIComponent(file2Name)}`;
+        });
+
+        // 下載點 3 的提示警告
+        function handlePendingDownload() {
+            alert("ℹ️ 提示：\n「3. 產品主檔下載」之雲端聯結目前由網管人員保留空下，暫未開放下載。如需調閱請洽資安人員。");
+        }
+    </script>
+</body>
+</html>
