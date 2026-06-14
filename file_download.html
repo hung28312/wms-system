@@ -35,26 +35,26 @@
 
             <div class="space-y-3" id="download-list">
 
-                <a id="link-download-1" download class="flex items-center gap-4 bg-slate-900/60 hover:bg-slate-900 p-4 rounded-xl border border-slate-800 hover:border-cyan-500/40 shadow-sm transition-all group cursor-pointer">
+                <a href="files/%E6%97%A5%E6%AD%A3%E6%A3%A7%E6%9D%BF%E5%A0%86%E5%A3%98%E7%B3%BB%E7%B5%B1-20260612-%E6%9C%AC%E6%A9%9F.xlsm" download class="flex items-center gap-4 bg-slate-900/60 hover:bg-slate-900 p-4 rounded-xl border border-slate-800 hover:border-cyan-500/40 shadow-sm transition-all group cursor-pointer">
                     <div class="bg-amber-500/10 text-amber-400 p-3 rounded-xl group-hover:scale-105 transition-transform">
                         <i class="fa-regular fa-file-excel text-xl"></i>
                     </div>
                     <div class="flex-1 min-w-0">
                         <h3 class="text-sm font-bold text-slate-200 group-hover:text-cyan-400 transition-colors truncate">1. 單機作業排板系統</h3>
-                        <p class="text-[11px] text-slate-500 font-mono mt-0.5 truncate">files/日正棧板堆壘系統-20260612-UI .xlsm</p>
+                        <p class="text-[11px] text-slate-500 font-mono mt-0.5 truncate">files/日正棧板堆壘系統-20260612-本機.xlsm</p>
                     </div>
                     <div class="text-slate-600 group-hover:text-cyan-400 transition-all px-2 text-xs font-semibold flex items-center gap-1">
                         <span>下載</span> <i class="fa-solid fa-download animate-pulse"></i>
                     </div>
                 </a>
 
-                <a id="link-download-2" download class="flex items-center gap-4 bg-slate-900/60 hover:bg-slate-900 p-4 rounded-xl border border-slate-800 hover:border-cyan-500/40 shadow-sm transition-all group cursor-pointer">
+                <a href="files/%E6%97%A5%E6%AD%A3%E6%A3%A7%E6%9D%BF%E5%A0%86%E5%A3%98%E7%B3%BB%E7%B5%B1-20260613-%E9%9B%B2%E7%AB%AF.xlsm" download class="flex items-center gap-4 bg-slate-900/60 hover:bg-slate-900 p-4 rounded-xl border border-slate-800 hover:border-cyan-500/40 shadow-sm transition-all group cursor-pointer">
                     <div class="bg-emerald-500/10 text-emerald-400 p-3 rounded-xl group-hover:scale-105 transition-transform">
                         <i class="fa-regular fa-file-excel text-xl"></i>
                     </div>
                     <div class="flex-1 min-w-0">
                         <h3 class="text-sm font-bold text-slate-200 group-hover:text-cyan-400 transition-colors truncate">2. 產品雲端排板系統</h3>
-                        <p class="text-[11px] text-slate-500 font-mono mt-0.5 truncate">files/日正棧板堆壘系統-20260613-UI .xlsm</p>
+                        <p class="text-[11px] text-slate-500 font-mono mt-0.5 truncate">files/日正棧板堆壘系統-20260613-雲端.xlsm</p>
                     </div>
                     <div class="text-slate-600 group-hover:text-cyan-400 transition-all px-2 text-xs font-semibold flex items-center gap-1">
                         <span>下載</span> <i class="fa-solid fa-download animate-pulse"></i>
@@ -87,17 +87,9 @@
         const currentRole = (urlParams.get("role") || "user").trim().toLowerCase();
 
         document.addEventListener("DOMContentLoaded", () => {
-            // 1. 顯示精確的使用者名稱與職稱
+            // 顯示精確的使用者名稱與職稱
             const roleBadge = (currentRole === 'admin') ? '系統管理員' : '主管';
             document.getElementById("user-display").innerText = `${currentOperator} (${roleBadge})`;
-
-            // 2. 🎯 精確編碼配置檔案路徑：解決中文字元與空白「-UI .xlsm」導致的網頁 404 問題
-            const file1Name = "日正棧板堆壘系統-20260612-本機.xlsm";
-            const file2Name = "日正棧板堆壘系統-20260613-雲端.xlsm";
-
-            // 組裝路徑 (轉為網頁安全字串：例如空白會被轉為 %20)
-            document.getElementById("link-download-1").href = `files/${encodeURIComponent(file1Name)}`;
-            document.getElementById("link-download-2").href = `files/${encodeURIComponent(file2Name)}`;
         });
 
         // 下載點 3 的提示警告
