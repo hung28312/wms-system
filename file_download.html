@@ -92,8 +92,8 @@
             document.getElementById("user-display").innerText = `${currentOperator} (${roleBadge})`;
 
             // 2. 🎯 精確編碼配置檔案路徑：解決中文字元與空白「-UI .xlsm」導致的網頁 404 問題
-            const file1Name = "日正棧板堆壘系統-20260612-UI .xlsm";
-            const file2Name = "日正棧板堆壘系統-20260613-UI .xlsm";
+            const file1Name = "日正棧板堆壘系統-20260612-本機.xlsm";
+            const file2Name = "日正棧板堆壘系統-20260613-雲端.xlsm";
 
             // 組裝路徑 (轉為網頁安全字串：例如空白會被轉為 %20)
             document.getElementById("link-download-1").href = `files/${encodeURIComponent(file1Name)}`;
