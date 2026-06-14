@@ -77,6 +77,19 @@
                 </div>
             </button>
 
+            <button onclick="openAuthModal('download')" class="w-full flex items-center gap-4 bg-slate-800/80 hover:bg-slate-800 p-5 rounded-2xl border border-slate-700/60 shadow-md hover:border-cyan-500/50 hover:shadow-cyan-900/20 transition-all duration-200 group text-left cursor-pointer">
+                <div class="bg-cyan-500/10 text-cyan-400 p-3 rounded-xl group-hover:scale-110 transition-transform">
+                    <i class="fa-solid fa-cloud-arrow-down text-xl"></i>
+                </div>
+                <div class="flex-1">
+                    <h2 class="text-base font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">5. 檔案下載專區</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">相關報表與核心營運文件下載 (限管理員與主管)</p>
+                </div>
+                <div class="text-slate-500 group-hover:text-cyan-400 transition-colors">
+                    <i class="fa-solid fa-lock text-sm"></i>
+                </div>
+            </button>
+
         </div>
 
         <div id="admin-menu-section" class="hidden space-y-6">
@@ -141,7 +154,7 @@
         const SUPABASE_URL = "https://mmqvewwmpzutyzrovnkp.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tcXZld3dtcHp1dHl6cm92bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTE0OTYsImV4cCI6MjA5NTg2NzQ5Nn0.taGVo2jp3Z5BQ0jmZiC0j-Yn5oVryFbHiopHst8NK14";
 
-        let currentAuthMode = ''; // admin, products, password
+        let currentAuthMode = ''; // admin, products, password, download
 
         function openAuthModal(mode) {
             currentAuthMode = mode;
@@ -160,6 +173,11 @@
                 icon.innerHTML = `<span class="text-emerald-400"><i class="fa-solid fa-boxes-packing"></i></span>`;
                 title.innerText = "產品主檔維護驗證";
                 desc.innerText = "變更產品主檔規格需具備管理員或主管身分";
+            } else if (mode === 'download') {
+                // 🎯 檔案下載的彈窗外觀定義
+                icon.innerHTML = `<span class="text-cyan-400"><i class="fa-solid fa-cloud-arrow-down"></i></span>`;
+                title.innerText = "檔案下載安全驗證";
+                desc.innerText = "讀取機密文件需具備管理員或主管身分";
             } else {
                 icon.innerHTML = `<span class="text-amber-400"><i class="fa-solid fa-user-lock"></i></span>`;
                 title.innerText = "變更密碼身分驗證";
@@ -183,7 +201,6 @@
                 return;
             }
 
-            // 🛠️ 離線測試機制
             if (userPass === "admin123") {
                 const isTestAdmin = (userId === "120404" || userId === "1" || userId.toLowerCase().includes("admin"));
                 executeLoginSuccess({
@@ -207,13 +224,10 @@
 
                 if (users.length > 0 && String(users[0].password) === String(userPass)) {
                     const matchedUser = users[0];
-                    
-                    // 🎯【修正 1】：不要在這邊把 supervisor 與 admin 綁在一起。各自保留原本在資料庫定義的角色代號！
                     let userRole = matchedUser.role ? matchedUser.role.trim().toLowerCase() : "user";
                     
                     localStorage.setItem("currentUser", JSON.stringify(matchedUser));
                     
-                    // 打包真實姓名 (display_name)，如果為空就改帶工號
                     executeLoginSuccess({ 
                         username: matchedUser.username, 
                         display_name: matchedUser.display_name || matchedUser.username, 
@@ -236,7 +250,6 @@
             closeAuthModal();
             
             if (currentAuthMode === 'admin') {
-                // 1. 點擊管理後台：權限必須是 admin
                 if (userObject.role === 'admin') {
                     document.getElementById("main-menu").classList.add("hidden");
                     document.getElementById("admin-menu-section").classList.remove("hidden");
@@ -244,15 +257,20 @@
                     alert("❌ 驗證失敗：您的帳號權限不足，非 Admin 管理員！");
                 }
             } else if (currentAuthMode === 'products') {
-                // 🎯【修正 2】：放行條件改為只要是 admin 或 supervisor 都可以進入產品維護
                 if (userObject.role === 'admin' || userObject.role === 'supervisor') {
-                    // 正確把當前真正的身分（可能是 admin 或 supervisor）傳遞出去
                     window.location.href = `products_management.html?username=${encodeURIComponent(userObject.display_name)}&role=${encodeURIComponent(userObject.role)}`;
                 } else {
                     alert("❌ 權限不足：變更產品主檔欄位需具備【管理員】或【主管】身分！");
                 }
+            } else if (currentAuthMode === 'download') {
+                // 🎯【新增分流】：限制僅 admin 及 supervisor 可以成功進入檔案下載專區
+                if (userObject.role === 'admin' || userObject.role === 'supervisor') {
+                    // 請在這裡換成您實際要導向的下載區檔名（例如: file_download.html）
+                    window.location.href = `file_download.html?username=${encodeURIComponent(userObject.display_name)}&role=${encodeURIComponent(userObject.role)}`;
+                } else {
+                    alert("❌ 權限不足：讀取或下載系統核心營運文件需具備【管理員】或【主管】身分！");
+                }
             } else if (currentAuthMode === 'password') {
-                // 3. 點擊變更密碼：所有人都可以進入
                 window.location.href = `change_password.html?picker_id=${encodeURIComponent(userObject.username)}`;
             }
         }
