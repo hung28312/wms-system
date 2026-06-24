@@ -4,9 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>WMS行動撿貨系統_C)</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4">
+        document.addEventListener("DOMContentLoaded",()=>{
+        currentPickerTableId=1;
+        currentPickerId="PDA";
+        currentPickerName="PDA";
+        document.getElementById("page-orders").classList.remove("hidden");
+        loadOrders();
+        });
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode">
+document.addEventListener("DOMContentLoaded",()=>{
+ currentPickerTableId=1;
+ currentPickerId="PDA";
+ currentPickerName="PDA";
+ document.getElementById("page-orders").classList.remove("hidden");
+ loadOrders();
+});
+</script>
     <style>
         @keyframes pulse-red {
             0%, 100% { border-color: #ef4444; background-color: #fef2f2; }
@@ -15,6 +31,7 @@
         .error-flash {
             animation: pulse-red 0.4s ease-in-out 3;
         }
+        /* 調整 html5-qrcode 內部控制項，美化介面 */
         #qr-reader button {
             background-color: #3b82f6;
             color: white;
@@ -26,6 +43,7 @@
             cursor: pointer;
         }
         #qr-reader img { display: none !important; }
+        /* 讓掃描框維持錄影的活體動態，不結凍 */
         #qr-reader video {
             object-fit: cover !important;
         }
@@ -37,7 +55,6 @@
             let CURRENT_USER_ID = "";
             let CURRENT_USER_ROLE = "";
             let CURRENT_USER_NAME = "";
-            let CURRENT_USER_TABLE_ID = null; // 🌟【關鍵新增】：儲存 users 資料表的數字 id
 
             (function() {
                 const cachedData = sessionStorage.getItem("currentUser");
@@ -51,18 +68,17 @@
                 try {
                     const userObj = JSON.parse(cachedData);
                     
-                    // 🌟 精確提取變數，包含最核心的數字 id
-                    CURRENT_USER_TABLE_ID = userObj.id ? parseInt(userObj.id) : null; // 👈 提取數字 ID
-                    CURRENT_USER_ID = userObj.username;                    // 帳號/工號字串
-                    CURRENT_USER_ROLE = userObj.role ? userObj.role.trim().toLowerCase() : "user"; // 權限角色
+                    // 🌟 在這裡精確提取三個核心變數，並存入全域供整頁程式使用
+                    CURRENT_USER_ID = userObj.username;                    // 帳號/工號
+                    CURRENT_USER_ROLE = userObj.role.trim().toLowerCase(); // 權限角色
                     CURRENT_USER_NAME = userObj.display_name;              // 顯示姓名
 
-                    // 後台網頁的權限過濾（撿貨頁 pda_picking.html 可手動拿掉這段 if 判斷，但留著也沒關係，除非是出貨人員要用）
-                    // if (CURRENT_USER_ROLE !== "admin" && CURRENT_USER_ROLE !== "supervisor") {
-                    //     alert("❌ 權限不足：您目前的職責無法存取管理後台控制台！");
-                    //     window.location.href = "index.html";
-                    //     return;
-                    // }
+                    // 後台網頁的權限過濾（撿貨頁 pda_picking.html 可拿掉這段 if 判斷）
+                    if (CURRENT_USER_ROLE !== "admin" && CURRENT_USER_ROLE !== "supervisor") {
+                        alert("❌ 權限不足：您目前的職責無法存取管理後台控制台！");
+                        window.location.href = "index.html";
+                        return;
+                    }
                 } catch (e) {
                     sessionStorage.removeItem("currentUser");
                     window.location.href = "index.html";
@@ -235,7 +251,15 @@
                 window.location.href = "index.html"; 
             }
         }
+                document.addEventListener("DOMContentLoaded", () => {
 
+            document.getElementById("app-header").classList.remove("hidden");
+            document.getElementById("page-orders").classList.remove("hidden");
+
+            //document.getElementById("user-badge").innerText =`👤 ${currentPickerName}`;
+            document.getElementById("user-badge").innerText =`👤 ${CURRENT_USER_NAME}`;
+            loadOrders();
+        });
                 // 📅 初始化日期控制項（如果沒選，預設為今日 YYYY-MM-DD）
         function initFilterDate() {
             const dateInput = document.getElementById("filter-date");
@@ -341,7 +365,7 @@
               setTimeout(() => playBeep(1200, 0.15), 80);
         }
 
-        // 📂 動態抓取該單據下的所有棧板（支援本人續接，非本人鎖定機制）
+// 📂 動態抓取該單據下的所有棧板（支援本人續接，非本人鎖定機制）
         async function toggleOrderGroup(orderId) {
             const subBox = document.getElementById(`sub-pallets-${orderId}`);
             const arrow = document.getElementById(`arrow-${orderId}`);
@@ -367,58 +391,54 @@
 
                     childPallets.forEach(p => {
                         const row = document.createElement("div");
+                        
                         const currentStatus = p.status || '待撿貨';
                         
-                        // 🎯【權威判定】：對齊最上層防闖警衛數字 ID
-                        const isMyOwnJob = (
-                            currentStatus === "撿貨中" && 
-                            p.picker_id !== null && 
-                            parseInt(p.picker_id) === parseInt(CURRENT_USER_TABLE_ID)
-                        );
+                        // 🎯【核心判斷】：如果狀態是撿貨中，且裡面的 picker_id 剛好等於現在登入的人，就是「本人續接」
+                        const isMyOwnJob = (currentStatus === "撿貨中" && p.picker_id !== null && parseInt(p.picker_id) === parseInt(currentPickerTableId));
                         
-                        // 🎯【安全鎖定】：別人正在撿，或者已經完工
+                        // 🎯【鎖定條件變更】：必須是 (撿貨中且非本人) 或者 (已完成)，才需要被安全防護鎖定
                         const isLocked = ((currentStatus === "撿貨中" && !isMyOwnJob) || currentStatus === "已完成");
 
-                        // --- 1. 計算畫面徽章（Badge）顏色與文字 ---
                         let badgeColor = "bg-gray-200 text-gray-600 border-gray-300";
-                        let statusText = currentStatus;
-
-                        if (currentStatus === "待撿貨") {
-                            badgeColor = "bg-amber-100 text-amber-900 border-amber-200";
-                        } else if (currentStatus === "撿貨中") {
-                            if (isMyOwnJob) {
-                                badgeColor = "bg-blue-600 text-white border-blue-700 animate-pulse font-black";
-                                statusText = "續撿中";
-                            } else {
-                                badgeColor = "bg-blue-100 text-blue-900 border-blue-200 animate-pulse";
-                            }
-                        } else if (currentStatus === "已完成") {
-                            badgeColor = "bg-green-100 text-green-900 border-green-200";
+                        if (currentStatus === "待撿貨") badgeColor = "bg-amber-100 text-amber-900 border-amber-200";
+                        // 💡 如果是本人的任務，標籤特別標示「續撿」，方便辨識
+                        if (currentStatus === "撿貨中") {
+                            badgeColor = isMyOwnJob 
+                                ? "bg-blue-600 text-white border-blue-700 animate-pulse font-black" 
+                                : "bg-blue-100 text-blue-900 border-blue-200 animate-pulse";
+                        }
+                        if (currentStatus === "已完成") badgeColor = "bg-green-100 text-green-900 border-green-200";
+                        
+                        if (isLocked) {
+                            // 🔒 鎖定狀態：非本人撿貨中，或已完工單據
+                            row.className = "p-3.5 flex justify-between items-center bg-gray-100 opacity-50 cursor-not-allowed transition-colors";
+                            row.onclick = () => {
+                                playBeep(300, 0.3);
+                                alert(`🚫 安全安全防護：該棧板目前由其他人員 [狀態: ${currentStatus}] 作業中，已被系統鎖定！`);
+                            };
+                        } else {
+                            // 🔓 允許點選狀態：待撿貨，或者【本人正在處理的續接任務】
+                            row.className = "p-3.5 flex justify-between items-center active:bg-blue-50/50 cursor-pointer transition-colors";
+                            row.onclick = () => {
+                                activePalletObject = p; 
+                                startPicking(p.id);
+                            };
                         }
                         
-                        if (isLocked) statusText = currentStatus + ' (鎖定)';
-
-                        // --- 2. 計算小鎖頭或作業中圖示 ---
+                        // 在名稱後方加上鎖頭或本人專屬圖示
                         let lockIcon = '';
                         if (isLocked) {
                             lockIcon = `<i class="fa-solid fa-lock text-red-500 ml-1 text-xs"></i>`;
                         } else if (isMyOwnJob) {
                             lockIcon = `<i class="fa-solid fa-user-pen text-blue-600 ml-1 text-xs" title="您的續撿任務"></i>`;
                         }
-
-                        // --- 3. 動態判定橫條（Row）的外部框架樣式（確保非鎖定狀態顏色清晰可點） ---
-                        if (isLocked) {
-                            row.className = "p-3.5 flex justify-between items-center bg-gray-100 opacity-50 cursor-not-allowed transition-colors border-b border-gray-100";
-                        } else {
-                            if (isMyOwnJob) {
-                                // 💡 續撿中橫條：給予淡淡的藍色外觀與左側亮藍條，提示作業員優先點擊
-                                row.className = "p-3.5 flex justify-between items-center bg-blue-50/60 active:bg-blue-100/80 cursor-pointer transition-colors border-l-4 border-blue-600 border-b border-gray-100";
-                            } else {
-                                row.className = "p-3.5 flex justify-between items-center bg-white active:bg-gray-50 cursor-pointer transition-colors border-b border-gray-100";
-                            }
-                        }
-
-                        // --- 4. 【關鍵修改】：先鋪設 HTML 結構，不要急著綁 onclick ---
+                        
+                        // 顯示文字調整：若是本人則顯示「續撿中」，否則維持原樣
+                        let statusText = currentStatus;
+                        if (isMyOwnJob) statusText = "續撿中";
+                        if (isLocked) statusText = currentStatus + ' (鎖定)';
+                        
                         row.innerHTML = `
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-500 text-sm shadow-2xs">
@@ -433,19 +453,6 @@
                                 ${statusText} <i class="fa-solid fa-chevron-right text-[9px] ml-0.5"></i>
                             </span>
                         `;
-
-                        // --- 5. 【關鍵修改】：HTML 渲染完畢後，最後才正式綁定安全的點擊事件 ---
-                        row.onclick = () => {
-                            if (isLocked) {
-                                playBeep(300, 0.3);
-                                alert(`🚫 安全防護：該棧板目前由其他人員 [狀態: ${currentStatus}] 作業中，已被系統鎖定！`);
-                            } else {
-                                console.log(`⚡ [續撿/開撿觸發] 棧板編號: ${p.pallet_no}, ID: ${p.id}`);
-                                activePalletObject = p; 
-                                startPicking(p.id);
-                            }
-                        };
-
                         subBox.appendChild(row);
                     });
                 } catch (err) {
@@ -457,20 +464,13 @@
         // 🎯 進入明細撿貨頁面
         async function startPicking(palletId) {
             currentPalletId = palletId;
-            let pInfo = activePalletObject || {};
+            const pInfo = activePalletObject;
+            if(!pInfo) return;
      
-            // 🎯【安全防線修正】：導入數字 ID 與字串工號的雙重防護驗證，徹底防呆
+            // 🎯【更新防線】：只有當狀態是已完成，或是撿貨中「且非本人」時才攔截
             const checkStatus = pInfo.status || '待撿貨';
-            const dbPickerId = pInfo.picker_id ? String(pInfo.picker_id).trim() : '';
-            const myIdStr = currentPickerId ? String(currentPickerId).trim() : '';
-            const myTableIdStr = CURRENT_USER_TABLE_ID ? String(CURRENT_USER_TABLE_ID).trim() : '';
+            const isNotMyJob = (checkStatus === "撿貨中" && pInfo.picker_id !== null && parseInt(pInfo.picker_id) !== parseInt(currentPickerTableId));
             
-            // 💡 只有當「既不等於我的數字 ID」而且「也不等於我的工號字串」時，才判定為別人的工作
-            const isNotMyJob = (
-                checkStatus === "撿貨中" && 
-                dbPickerId !== myTableIdStr 
-            );
-
             if (isNotMyJob || checkStatus === "已完成") {
                 playBeep(300, 0.3);
                 alert(`🚫 點選失敗：該棧板剛剛已被其他人員更新或完工。系統將自動重新整理清單。`);
@@ -478,42 +478,6 @@
                 return;
             }
 
-            // ================= 🌟【核心修正：第一個品項開始時，強制寫入主表格 pallet_orders】=================
-            const nowISO = new Date().toISOString();
-            
-            // 抓取全域的數字型態 ID（從 index 傳過來解開的整數）
-            const numericPickerId = parseInt(currentPickerTableId) || 1;
-
-            // 同步更新本地端記憶體快取
-            pInfo.status = "撿貨中";
-            pInfo.picker_id = myIdStr; 
-            pInfo.start_time = nowISO;
-
-            try {
-                console.log(`正在更新主表格 pallet_orders ID: ${palletId}, 寫入的數字 ID: ${numericPickerId}`);
-                const syncResponse = await fetch(`${SUPABASE_URL}/rest/v1/pallet_orders?id=eq.${palletId}`, {
-                    method: "PATCH",
-                    headers: {
-                        "apikey": SUPABASE_KEY,
-                        "Authorization": `Bearer ${SUPABASE_KEY}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        status: "撿貨中",
-                        picker_id: numericPickerId, // 💡 丟入整數 ID，對齊 Supabase 外鍵
-                        start_time: nowISO
-                    })
-                });
-
-                if (!syncResponse.ok) {
-                    console.error("雲端主表格 pallet_orders 寫入失敗，原因：", await syncResponse.text());
-                } else {
-                    console.log("✅ 雲端主表格 pallet_orders 的 status、picker_id、start_time 已成功同步寫入！");
-                }
-            } catch (syncErr) {
-                console.error("主表格網路連線寫入異常:", syncErr);
-            }
-            // 以下完整保留原本的畫面渲染與明細載入邏輯，不作任何更動
             document.getElementById("lbl-pallet-no").innerText = pInfo.pallet_no || "-";
             document.getElementById("lbl-vendor").innerText = pInfo.ship_vendor || "未指定";
             document.getElementById("lbl-date").innerText = pInfo.ship_date || "-";
@@ -537,6 +501,7 @@
                 if (!response.ok) throw new Error("物料明細撈取失敗");
                 const rawItems = await response.json();
 
+                // 💡 FIFO 與重量排序
                 rawItems.sort((a, b) => {
                     const weightA = parseFloat(a.unit_weight) || 0;
                     const weightB = parseFloat(b.unit_weight) || 0;
@@ -635,6 +600,7 @@
                 if (loader) loader.classList.add("hidden");
             }
         }
+
         // 💾 效期回存
         async function updateExpiry(itemId, index) {
             const dateInput = document.getElementById(`input-exp-${itemId}`);
@@ -944,36 +910,27 @@
  
 
         // 空白處點擊防呆
-
-// 🎯 終極融合：全網頁只保留這一個 DOMContentLoaded 監聽器，絕不允許變數被洗掉
+// 🌟 網頁啟動初始化檢查（安全守衛）
         document.addEventListener("DOMContentLoaded", () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlUserTableId = urlParams.get('picker_table_id') || urlParams.get('id');
+            // 🌟 改為讀取安全期 Session 記憶
+            const cachedUser = sessionStorage.getItem("currentUser");
 
-            // 🌟 核心優先序：防闖警衛解鎖的ID > 網址帶入的ID > 預設值 1
-            if (CURRENT_USER_TABLE_ID) {
-                currentPickerTableId = parseInt(CURRENT_USER_TABLE_ID);
-            } else if (urlUserTableId) {
-                currentPickerTableId = parseInt(urlUserTableId);
-            } else {
-                currentPickerTableId = 1; 
+            if (cachedUser) {
+                try {
+                    const userObj = JSON.parse(cachedUser);
+                    renderMenuByRole(userObj); // 如果有記憶，直接帶入選單，不清除
+                    return; 
+                } catch(e) {
+                    sessionStorage.removeItem("currentUser");
+                }
             }
-            
-            // 綁定其餘顯示用的全域變數
-            currentPickerId = CURRENT_USER_ID || "PDA";      
-            currentPickerName = CURRENT_USER_NAME || "PDA";  
 
-            console.log("🚀 [系統初始化成功] 目前登入者資料庫流水號數字 ID:", currentPickerTableId);
-            // ================= 🌟【關鍵修改：將姓名與工號帶入頂端 Badge】=================
-            const userBadgeEl = document.getElementById("user-badge");
-            if (userBadgeEl) {
-                // 格式如：[A001] 王小明 (可依現場喜好自行微調格式)
-                userBadgeEl.innerText = `[${currentPickerId}] ${currentPickerName}`;
-            }
-            // =========================================================================
-            // 顯示主要訂單畫面並載入
-            document.getElementById("page-orders").classList.remove("hidden");
-            loadOrders();
+            // 以下為原本的初始化清空畫面
+            document.getElementById("auth-id").value = "";
+            document.getElementById("auth-pass").value = "";
+            document.getElementById("system-subtitle").innerText = "請先登入系統以載入您的作業權限";
+            document.getElementById("menu-section").classList.add("hidden");
+            document.getElementById("login-section").classList.remove("hidden");
         });
         // 實體 Enter 監聽器 (PDA槍用)
         document.addEventListener("keyup", (e) => {
@@ -1000,7 +957,15 @@
         }
 
 
-
+document.addEventListener("DOMContentLoaded", () => {
+    currentPickerTableId = 1;
+    // 🌟 確保直接讀取頂端「防闖警衛」解鎖成功的全域變數
+    currentPickerId = CURRENT_USER_ID || "PDA";      
+    currentPickerName = CURRENT_USER_NAME || "PDA";  
+    
+    document.getElementById("page-orders").classList.remove("hidden");
+    loadOrders();
+});
 </script>
 </body>
 </html>
